@@ -1,0 +1,53 @@
+===============================================================================
+VANO TEXT EDITOR - USER GUIDE & ADVANCED WORKFLOWS
+===============================================================================
+
+1. INTERACTIVE MODES
+Vano uses a modal execution architecture to maximize terminal efficiency.
+
+   A. NORMAL MODE
+      The default baseline operational layer. Key strokes map directly to core 
+      navigation shortcuts, clipboard processes, and editing workflows.
+
+   B. VISUAL MODE (TEXT SELECTION)
+      Activated by pressing Ctrl+V. Characters and whole rows are added to a 
+      selection span as the cursor moves, rendered on screen using inverse 
+      video text highlights.
+
+   C. ACTION INPUT PROMPTS
+      A modal command area at the base of the viewport activates when searching, 
+      replacing, or processing interactive file queries.
+
+2. ADVANCED INTERACTIVE WORKFLOWS
+
+   A. REGEX SEARCH & REPLACE
+      1. Trigger the workflow by pressing Ctrl+F or Ctrl+\.
+      2. Type your search pattern string at the prompt line.
+      3. Supply your intended replacement string sequence when requested.
+      4. The editor scans forward and jumps to match targets sequentially.
+      5. Input character keys to approve actions:
+         y - Apply change and go to next match
+         n - Skip match and move forward
+         a - Replace all matching instances automatically
+         q - Abort operation immediately
+
+   B. BLOCK CLIPBOARD MANAGEMENT
+      1. Navigate to a text region and hit Ctrl+V to enter Visual Mode.
+      2. Move the cursor using directional keys to wrap your target text block.
+      3. Press Ctrl+C to copy or Ctrl+X to cut the selection into the clipboard.
+      4. The editor automatically returns to Normal Mode.
+      5. Position your cursor anywhere else and hit Ctrl+P to paste the block.
+
+   C. LIVE BRACKET PARSING
+      When the cursor sits over structural characters like {, }, (, ), [, or ], 
+      the framework parses the active content buffer to identify the paired index. 
+      Vano applies an alternative color layout to both brackets in real time to 
+      help maintain code structure visibility.
+
+3. RECOVERY PROCEDURES
+If your connection drops or your terminal environment terminates unexpectedly, 
+Vano ensures data preservation by saving auto-recovery snapshots. To restore 
+your work after an ungraceful exit:
+
+   mv .vano_bak lost_file.txt
+===============================================================================
