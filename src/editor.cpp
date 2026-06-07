@@ -144,7 +144,7 @@ void Editor::findAndReplace() {
                         buffer.lines[i] = updated;
                         std::vector<std::string> new_blk = { updated };
                         buffer.pushBlockUndo(i, i, old_blk, new_blk, match_pos, i, match_pos + replace.size(), i, UndoType::BLOCK_REPLACE);
-                        
+
                         current_line = updated;
                         search_offset = match_pos + replace.size();
                         if (match.length(0) == 0) {
@@ -159,7 +159,7 @@ void Editor::findAndReplace() {
                     buffer.lines[i] = updated;
                     std::vector<std::string> new_blk = { updated };
                     buffer.pushBlockUndo(i, i, old_blk, new_blk, match_pos, i, match_pos + replace.size(), i, UndoType::BLOCK_REPLACE);
-                    
+
                     current_line = updated;
                     search_offset = match_pos + replace.size();
                     if (match.length(0) == 0) {
@@ -171,8 +171,8 @@ void Editor::findAndReplace() {
                 search_offset = match_pos + (match.length(0) > 0 ? match.length(0) : 1);
             }
         }
-    } catch (const std::regex_error&) {
-        setStatus("Invalid Regex Pattern.");
+    } catch (...) {
+        setStatus("Invalid Regex Pattern Error.");
     }
     mode = old_mode;
 }
@@ -187,6 +187,13 @@ void Editor::processKeypress() {
     }
 
     switch (c) {
+        case TAB_KEY: {
+            for (int i = 0; i < screen.tab_size; ++i) {
+                buffer.insertChar(cursor.cy, cursor.cx, ' ');
+                cursor.cx++;
+            }
+            break;
+        }
         case '\r':
         case '\n':
             buffer.insertNewline(cursor.cy, cursor.cx);
@@ -268,37 +275,34 @@ void Editor::processKeypress() {
                 clipboard.clear();
                 int sy = sel_start_y, ey = cursor.cy, sx = sel_start_x, ex = cursor.cx;
                 if (sy > ey || (sy == ey && sx > ex)) { std::swap(sy, ey); std::swap(sx, ex); }
-                
+
                 std::vector<std::string> old_block;
                 for (int i = sy; i <= ey; ++i) {
-                    if (i >= 0 && i < static_cast<int>(buffer.lines.size())) {
-                        old_block.push_back(buffer.lines[i]);
-                    }
+                    old_block.push_back(buffer.lines[i]);
                 }
-                
+
                 for (int i = sy; i <= ey; ++i) {
                     if (i == sy && i == ey) {
                         clipboard.push_back(buffer.lines[i].substr(sx, ex - sx + 1));
-                        buffer.lines[i].erase(sx, ex - sx + 1);
                     } else if (i == sy) {
                         clipboard.push_back(buffer.lines[i].substr(sx));
-                        buffer.lines[i] = buffer.lines[i].substr(0, sx);
                     } else if (i == ey) {
                         clipboard.push_back(buffer.lines[i].substr(0, ex + 1));
-                        buffer.lines[i].erase(0, ex + 1);
                     } else {
                         clipboard.push_back(buffer.lines[i]);
-                        buffer.lines[i] = "";
                     }
                 }
+
+                std::string trailing_remainder = buffer.lines[ey].substr(ex + 1);
+                buffer.lines[sy] = buffer.lines[sy].substr(0, sx) + trailing_remainder;
+
                 if (sy != ey) {
-                    buffer.lines[sy] += buffer.lines[ey];
                     buffer.lines.erase(buffer.lines.begin() + sy + 1, buffer.lines.begin() + ey + 1);
                 }
-                
+
                 std::vector<std::string> new_block = { buffer.lines[sy] };
                 buffer.pushBlockUndo(sy, ey, old_block, new_block, cursor.cx, cursor.cy, sx, sy, UndoType::BLOCK_REPLACE);
-                
+
                 cursor.cx = sx;
                 cursor.cy = sy;
                 mode = MODE_NORMAL;

@@ -7,7 +7,8 @@ bool FileManager::openFile(Buffer& buffer, const std::string& filename) {
     if (!file.is_open()) return false;
     buffer.lines.clear();
     std::string line;
-    while (std::getline(file, line)) {
+    while (std::getline(file, file.is_open() ? line : line)) {
+        if (file.eof() && line.empty() && !buffer.lines.empty()) break;
         buffer.lines.push_back(line);
     }
     if (buffer.lines.empty()) {

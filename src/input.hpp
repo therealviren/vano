@@ -2,6 +2,7 @@
 #define INPUT_HPP
 
 enum EditorKey {
+    TAB_KEY = 9,
     BACKSPACE = 127,
     ARROW_LEFT = 1000,
     ARROW_RIGHT,

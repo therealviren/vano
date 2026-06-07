@@ -24,7 +24,7 @@ void Buffer::deleteChar(int y, int x) {
 void Buffer::insertNewline(int y, int x) {
     if (y < 0 || y >= static_cast<int>(lines.size())) return;
     if (x < 0 || x > static_cast<int>(lines[y].size())) x = lines[y].size();
-    
+
     std::vector<std::string> old_block = { lines[y] };
     std::string split = lines[y].substr(x);
     lines[y] = lines[y].substr(0, x);
@@ -38,7 +38,7 @@ void Buffer::insertNewline(int y, int x) {
     }
 
     lines.insert(lines.begin() + y + 1, indent + split);
-    
+
     std::vector<std::string> new_block = { lines[y], lines[y + 1] };
     pushBlockUndo(y, y + 1, old_block, new_block, x, y, 0, y + 1, UndoType::NEWLINE);
     dirty = true;
@@ -48,10 +48,10 @@ void Buffer::joinLines(int y) {
     if (y <= 0 || y >= static_cast<int>(lines.size())) return;
     std::vector<std::string> old_block = { lines[y - 1], lines[y] };
     int prev_len = lines[y - 1].size();
-    
+
     lines[y - 1] += lines[y];
     lines.erase(lines.begin() + y);
-    
+
     std::vector<std::string> new_block = { lines[y - 1] };
     pushBlockUndo(y - 1, y, old_block, new_block, prev_len, y - 1, prev_len, y - 1, UndoType::JOIN);
     dirty = true;
@@ -63,6 +63,9 @@ int Buffer::getLineLength(int y) const {
 }
 
 void Buffer::pushUndo(bool is_insert, int x, int y, const std::string& text) {
+    if (!current_node->children.empty()) {
+        current_node->children.clear();
+    }
     auto node = std::make_shared<UndoNode>();
     node->is_insert = is_insert;
     node->x = x;
@@ -75,6 +78,9 @@ void Buffer::pushUndo(bool is_insert, int x, int y, const std::string& text) {
 }
 
 void Buffer::pushBlockUndo(int start_y, int end_y, const std::vector<std::string>& old_block, const std::vector<std::string>& new_block, int old_cx, int old_cy, int new_cx, int new_cy, UndoType type) {
+    if (!current_node->children.empty()) {
+        current_node->children.clear();
+    }
     auto node = std::make_shared<UndoNode>();
     node->type = type;
     node->start_y = start_y;
@@ -94,7 +100,7 @@ void Buffer::undo(int& cx, int& cy) {
     if (!current_node) return;
     auto parent_ptr = current_node->parent.lock();
     if (!parent_ptr) return;
-    
+
     if (current_node->type == UndoType::CHAR_EDIT) {
         if (current_node->is_insert) {
             if (current_node->y >= 0 && current_node->y < static_cast<int>(lines.size())) {
@@ -124,7 +130,7 @@ void Buffer::undo(int& cx, int& cy) {
 void Buffer::redo(int& cx, int& cy) {
     if (current_node->children.empty()) return;
     auto next_node = current_node->children.back();
-    
+
     if (next_node->type == UndoType::CHAR_EDIT) {
         if (next_node->is_insert) {
             if (next_node->y >= 0 && next_node->y < static_cast<int>(lines.size())) {
@@ -157,14 +163,14 @@ void Buffer::toggleComment(int start_y, int end_y, const std::string& ext) {
     else if (ext == ".lua") prefix = "-- ";
 
     if (start_y > end_y) std::swap(start_y, end_y);
-    
+
     std::vector<std::string> old_block;
     for (int i = start_y; i <= end_y; ++i) {
         if (i >= 0 && i < static_cast<int>(lines.size())) {
             old_block.push_back(lines[i]);
         }
     }
-    
+
     for (int i = start_y; i <= end_y; ++i) {
         if (i < 0 || i >= static_cast<int>(lines.size())) continue;
         if (lines[i].rfind(prefix, 0) == 0) {
@@ -173,14 +179,14 @@ void Buffer::toggleComment(int start_y, int end_y, const std::string& ext) {
             lines[i].insert(0, prefix);
         }
     }
-    
+
     std::vector<std::string> new_block;
     for (int i = start_y; i <= end_y; ++i) {
         if (i >= 0 && i < static_cast<int>(lines.size())) {
             new_block.push_back(lines[i]);
         }
     }
-    
+
     pushBlockUndo(start_y, end_y, old_block, new_block, 0, start_y, 0, start_y, UndoType::BLOCK_REPLACE);
     dirty = true;
 }

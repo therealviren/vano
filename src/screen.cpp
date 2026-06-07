@@ -81,11 +81,23 @@ void Screen::checkBracketMatch(const Buffer& buffer, const Cursor& cursor, int& 
     }
 }
 
-void Screen::drawRows(const Buffer& buffer, const Cursor& cursor, EditorMode mode, int sel_sx, int sel_sy, int sel_ex, int sel_ey) {
+void Screen::drawRows(const Buffer& buffer, const Cursor& cursor, const std::string& filename, EditorMode mode, int sel_sx, int sel_sy, int sel_ex, int sel_ey) {
     int gutter = getGutterWidth(buffer.lines.size());
     int usable_cols = screen_cols - gutter;
     int bx, by;
     checkBracketMatch(buffer, cursor, bx, by);
+
+    size_t ext_idx = filename.rfind('.');
+    std::string ext = (ext_idx == std::string::npos) ? "" : filename.substr(ext_idx);
+
+    std::vector<std::string> keywords;
+    if (ext == ".cpp" || ext == ".hpp" || ext == ".h" || ext == ".cc") {
+        keywords = {"int", "void", "char", "class", "struct", "if", "else", "return", "while", "for", "include", "double", "float", "bool", "public", "private", "protected", "static", "const", "namespace"};
+    } else if (ext == ".py") {
+        keywords = {"def", "class", "if", "else", "elif", "return", "import", "from", "while", "for", "in", "try", "except", "lambda", "with", "as", "pass", "True", "False", "None"};
+    } else if (ext == ".sh") {
+        keywords = {"if", "then", "else", "fi", "for", "while", "do", "done", "echo", "exit", "return", "local", "case", "esac"};
+    }
 
     if (mode == MODE_VISUAL) {
         if (sel_sy > sel_ey || (sel_sy == sel_ey && sel_sx > sel_ex)) {
@@ -125,11 +137,67 @@ void Screen::drawRows(const Buffer& buffer, const Cursor& cursor, EditorMode mod
                 output_buffer += "~";
             }
         } else {
-            int len = static_cast<int>(buffer.lines[filerow].size()) - cursor.coloff;
-            if (len < 0) len = 0;
-            if (len > usable_cols) len = usable_cols;
+            int line_size = static_cast<int>(buffer.lines[filerow].size());
+            std::vector<std::string> syntax_colors(line_size, "");
+            std::string current_word = "";
+            std::vector<int> current_word_indices;
+            bool in_string = false;
+            char string_char = 0;
 
-            if (len == 0 && mode == MODE_VISUAL) {
+            for (int i = 0; i < line_size; ++i) {
+                char c = buffer.lines[filerow][i];
+
+                if (!in_string && (c == '"' || c == '\'')) {
+                    in_string = true;
+                    string_char = c;
+                    syntax_colors[i] = "\x1b[33m";
+                    continue;
+                }
+                if (in_string && c == string_char && (i == 0 || buffer.lines[filerow][i - 1] != '\\')) {
+                    in_string = false;
+                    syntax_colors[i] = "\x1b[33m";
+                    continue;
+                }
+                if (in_string) {
+                    syntax_colors[i] = "\x1b[33m";
+                    continue;
+                }
+
+                if (std::isalnum(c) || c == '_') {
+                    current_word += c;
+                    current_word_indices.push_back(i);
+                } else {
+                    if (!current_word.empty()) {
+                        bool is_keyword = std::find(keywords.begin(), keywords.end(), current_word) != keywords.end();
+                        bool is_number = std::isdigit(current_word[0]);
+                        std::string color = is_keyword ? "\x1b[32m" : (is_number ? "\x1b[36m" : "");
+                        if (!color.empty()) {
+                            for (int idx : current_word_indices) {
+                                syntax_colors[idx] = color;
+                            }
+                        }
+                        current_word.clear();
+                        current_word_indices.clear();
+                    }
+                }
+            }
+            if (!current_word.empty()) {
+                bool is_keyword = std::find(keywords.begin(), keywords.end(), current_word) != keywords.end();
+                bool is_number = std::isdigit(current_word[0]);
+                std::string color = is_keyword ? "\x1b[32m" : (is_number ? "\x1b[36m" : "");
+                if (!color.empty()) {
+                    for (int idx : current_word_indices) {
+                        syntax_colors[idx] = color;
+                    }
+                }
+            }
+
+            int total_chars = static_cast<int>(buffer.lines[filerow].size());
+            int visible_chars = total_chars - cursor.coloff;
+            if (visible_chars < 0) visible_chars = 0;
+            if (visible_chars > usable_cols) visible_chars = usable_cols;
+
+            if (visible_chars == 0 && mode == MODE_VISUAL) {
                 bool is_selected = false;
                 if (filerow > sel_sy && filerow < sel_ey) is_selected = true;
                 else if (filerow == sel_sy && filerow == sel_ey) is_selected = (cursor.coloff >= sel_sx && cursor.coloff <= sel_ex);
@@ -141,7 +209,7 @@ void Screen::drawRows(const Buffer& buffer, const Cursor& cursor, EditorMode mod
                 }
             }
 
-            for (int i = 0; i < len; i++) {
+            for (int i = 0; i < visible_chars; i++) {
                 int real_idx = i + cursor.coloff;
                 bool is_selected = false;
 
@@ -153,12 +221,15 @@ void Screen::drawRows(const Buffer& buffer, const Cursor& cursor, EditorMode mod
                 }
 
                 bool is_bracket = (filerow == by && real_idx == bx) || (filerow == cursor.cy && real_idx == cursor.cx && bx != -1);
+                std::string syntax_color = syntax_colors[real_idx];
 
                 if (is_selected) output_buffer += "\x1b[7m";
                 if (is_bracket) output_buffer += "\x1b[1;44m";
+                if (!is_bracket && !syntax_color.empty()) output_buffer += syntax_color;
 
                 output_buffer += buffer.lines[filerow][real_idx];
 
+                if (!is_bracket && !syntax_color.empty()) output_buffer += "\x1b[m";
                 if (is_bracket) output_buffer += "\x1b[m";
                 if (is_selected) output_buffer += "\x1b[m";
             }
@@ -207,7 +278,7 @@ void Screen::refresh(const Buffer& buffer, Cursor& cursor, const std::string& fi
     output_buffer.clear();
     output_buffer += "\x1b[?25l";
     output_buffer += "\x1b[H";
-    drawRows(buffer, cursor, mode, sel_sx, sel_sy, sel_ex, sel_ey);
+    drawRows(buffer, cursor, filename, mode, sel_sx, sel_sy, sel_ex, sel_ey);
     drawStatusBar(buffer, cursor, filename, mode);
     drawMessageBar(status_msg);
     char buf[32];

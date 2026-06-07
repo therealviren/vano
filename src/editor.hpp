@@ -17,7 +17,7 @@ private:
     std::string status_msg;
     bool quit;
     int auto_save_counter;
-    
+
     EditorMode mode;
     int sel_start_x;
     int sel_start_y;

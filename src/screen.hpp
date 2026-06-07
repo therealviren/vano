@@ -22,7 +22,7 @@ public:
     Screen();
     void init();
     void refresh(const Buffer& buffer, Cursor& cursor, const std::string& filename, const std::string& status_msg, EditorMode mode, int sel_sx, int sel_sy, int sel_ex, int sel_ey);
-    void drawRows(const Buffer& buffer, const Cursor& cursor, EditorMode mode, int sel_sx, int sel_sy, int sel_ex, int sel_ey);
+    void drawRows(const Buffer& buffer, const Cursor& cursor, const std::string& filename, EditorMode mode, int sel_sx, int sel_sy, int sel_ex, int sel_ey);
     void drawStatusBar(const Buffer& buffer, const Cursor& cursor, const std::string& filename, EditorMode mode);
     void drawMessageBar(const std::string& status_msg);
     void scroll(Cursor& cursor, const Buffer& buffer);
