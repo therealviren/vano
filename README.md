@@ -9,7 +9,12 @@ Vano is a fast, dependency-free modal terminal text editor written in modern C++
 * **Visual Mode & Clipboard:** Seamlessly select text blocks with inverted terminal rendering, then cut, copy, or paste lines effortlessly.
 * **Regex Search & Replace:** Execute advanced text modifications using precise regular expression matching with an interactive confirmation workflow.
 * **Smart Bracket Matching:** Real-time visual highlighting of matching brackets, braces, and parentheses to maintain structural awareness.
-* **Auto-Save Protection:** Background tracking engine automatically writes state snapshots to a recovery backup file if unforeseen termination occurs.
+* **Crash Recovery & Auto-Save:** Background tracking engine automatically writes state snapshots to a recovery backup file (`.vano_bak`) and prompts for interactive restoration upon startup if an unexpected termination is detected.
+* **Command Bar Mode (Ctrl + T):** Built-in micro-command line parsing interface allowing standard operations like file saving, quitting, loading resources, modifying configurations, or jumping to rows.
+* **Horizontal Scrolling:** Smooth horizontal screen movement that dynamically adapts as the cursor passes the horizontal margins, preventing long source lines from being clipped out of view.
+* **Smart Backspace for Tabs:** Intelligent deletion logic that recognizes block indentation spaces; pressing backspace wipes an entire tab-width of spaces at once instead of a single character.
+* **Flicker-Free Double Buffering:** High-performance rendering pipeline changes that buffer terminal graphics, eliminating screen flicker during rapid text entry or large file navigation.
+* **Live Coordinate Tracking:** Real-time visibility of exact cursor positions (`Ln X, Col Y`) displayed inside the right-hand status panel.
 * **Configuration Support:** Custom preference definitions fetched directly via an optional run-control layout file.
 * **Mouse Integration:** Support for standard terminal mouse interactions allowing on-click cursor adjustments.
 
@@ -68,6 +73,7 @@ show_gutter 1
 | :--- | :--- | :--- |
 | `Ctrl + Q` | Global | Exit Editor (Prompts if changes are unsaved) |
 | `Ctrl + S` | Global | Save File |
+| `Ctrl + T` | Normal | Open Command Bar (Supports `w`, `q`, `wq`, `open <file>`, `set tab <size>`, `goto <line>`) |
 | `Ctrl + F` / `Ctrl + \` | Global | Regular Expression Search and Replace |
 | `Ctrl + /` | Global | Toggle Comment on Active Line or Visual Selection |
 | `Ctrl + Z` | Global | Undo Action |

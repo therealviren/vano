@@ -6,6 +6,7 @@
 #include "screen.hpp"
 #include "utils.hpp"
 #include <string>
+#include <vector>
 
 class Editor {
 private:
@@ -15,6 +16,7 @@ private:
     TerminalState state;
     std::string filename;
     std::string status_msg;
+    std::string command_buffer;
     bool quit;
     int auto_save_counter;
 
@@ -27,6 +29,7 @@ private:
     void processKeypress();
     void findAndReplace();
     void handleMouse(int mx, int my, int mb);
+    void executeCommand(const std::string& cmd_str);
     std::string getFileExtension() const;
 public:
     Editor();

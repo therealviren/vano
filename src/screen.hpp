@@ -8,7 +8,8 @@
 enum EditorMode {
     MODE_NORMAL,
     MODE_VISUAL,
-    MODE_SEARCH
+    MODE_SEARCH,
+    MODE_COMMAND
 };
 
 class Screen {

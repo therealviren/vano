@@ -2,10 +2,14 @@
 #include "input.hpp"
 #include "file.hpp"
 #include "version.hpp"
+#include "commands.hpp"
 #include <unistd.h>
 #include <algorithm>
 #include <cctype>
 #include <regex>
+#include <sys/ioctl.h>
+#include <iostream>
+#include <fstream>
 
 #define CTRL_KEY(k) ((k) & 0x1f)
 
@@ -27,10 +31,32 @@ void Editor::init(const std::string& file_path) {
 
     filename = file_path;
     if (!filename.empty()) {
-        if (!FileManager::openFile(buffer, filename)) {
-            setStatus("New file: " + filename);
+        std::string backup_path = filename + ".vano_bak";
+        if (access(backup_path.c_str(), F_OK) == 0) {
+            disableRawMode(state);
+            std::cout << "Herstelbestand (.vano_bak) gedetecteerd. Wilt u dit herstellen? (y/n): ";
+            char response;
+            std::cin >> response;
+            enableRawMode(state);
+            if (response == 'y' || response == 'Y') {
+                buffer.lines.clear();
+                std::ifstream bf(backup_path);
+                std::string bline;
+                while (std::getline(bf, bline)) {
+                    buffer.lines.push_back(bline);
+                }
+                buffer.dirty = true;
+                setStatus("Hersteld van backup.");
+            } else {
+                FileManager::openFile(buffer, filename);
+                setStatus("Opened file: " + filename);
+            }
         } else {
-            setStatus("Opened file: " + filename);
+            if (!FileManager::openFile(buffer, filename)) {
+                setStatus("New file: " + filename);
+            } else {
+                setStatus("Opened file: " + filename);
+            }
         }
     } else {
         setStatus("Welcome to Vano editor - v" VANO_VERSION);
@@ -88,6 +114,58 @@ void Editor::moveCursor(int key) {
     }
     line_len = buffer.getLineLength(cursor.cy);
     if (cursor.cx > line_len) cursor.cx = line_len;
+}
+
+void Editor::executeCommand(const std::string& cmd_str) {
+    Command cmd = parseCommand(cmd_str);
+    switch (cmd.type) {
+        case CommandType::SAVE:
+            if (!filename.empty() && FileManager::saveFile(buffer, filename)) {
+                setStatus("File saved successfully.");
+                std::string backup_path = filename + ".vano_bak";
+                std::remove(backup_path.c_str());
+            } else {
+                setStatus("Error saving file.");
+            }
+            break;
+        case CommandType::QUIT:
+            quit = true;
+            break;
+        case CommandType::SAVE_QUIT:
+            if (!filename.empty() && FileManager::saveFile(buffer, filename)) {
+                std::string backup_path = filename + ".vano_bak";
+                std::remove(backup_path.c_str());
+                quit = true;
+            }
+            break;
+        case CommandType::OPEN:
+            if (!cmd.args.empty()) {
+                filename = cmd.args[0];
+                buffer.lines.clear();
+                FileManager::openFile(buffer, filename);
+                setStatus("Opened file: " + filename);
+            }
+            break;
+        case CommandType::SET_TAB:
+            if (!cmd.args.empty()) {
+                screen.tab_size = std::stoi(cmd.args[0]);
+            }
+            break;
+        case CommandType::SYNTAX:
+            break;
+        case CommandType::GOTO:
+            if (!cmd.args.empty()) {
+                int target_line = std::stoi(cmd.args[0]) - 1;
+                if (target_line >= 0 && target_line < static_cast<int>(buffer.lines.size())) {
+                    cursor.cy = target_line;
+                    cursor.cx = 0;
+                }
+            }
+            break;
+        default:
+            setStatus("Unknown command.");
+            break;
+    }
 }
 
 void Editor::findAndReplace() {
@@ -186,7 +264,29 @@ void Editor::processKeypress() {
         return;
     }
 
+    if (mode == MODE_COMMAND) {
+        if (c == '\x1b') {
+            mode = MODE_NORMAL;
+            setStatus("");
+        } else if (c == '\r' || c == '\n') {
+            executeCommand(command_buffer);
+            if (mode == MODE_COMMAND) mode = MODE_NORMAL;
+        } else if (c == BACKSPACE || c == DEL_KEY) {
+            if (!command_buffer.empty()) command_buffer.pop_back();
+            setStatus(":" + command_buffer);
+        } else if (!std::iscntrl(c) && c < 128) {
+            command_buffer += c;
+            setStatus(":" + command_buffer);
+        }
+        return;
+    }
+
     switch (c) {
+        case CTRL_KEY('t'):
+            mode = MODE_COMMAND;
+            command_buffer = "";
+            setStatus(":");
+            break;
         case TAB_KEY: {
             for (int i = 0; i < screen.tab_size; ++i) {
                 buffer.insertChar(cursor.cy, cursor.cx, ' ');
@@ -348,8 +448,26 @@ void Editor::processKeypress() {
         case BACKSPACE:
         case CTRL_KEY('h'):
             if (cursor.cx > 0) {
-                buffer.deleteChar(cursor.cy, cursor.cx - 1);
-                cursor.cx--;
+                int spaces = 0;
+                if (cursor.cx >= screen.tab_size) {
+                    bool structural_tab = true;
+                    for (int i = 1; i <= screen.tab_size; ++i) {
+                        if (buffer.lines[cursor.cy][cursor.cx - i] != ' ') {
+                            structural_tab = false;
+                            break;
+                        }
+                    }
+                    if (structural_tab) spaces = screen.tab_size;
+                }
+                if (spaces > 0) {
+                    for (int i = 0; i < spaces; ++i) {
+                        buffer.deleteChar(cursor.cy, cursor.cx - 1);
+                        cursor.cx--;
+                    }
+                } else {
+                    buffer.deleteChar(cursor.cy, cursor.cx - 1);
+                    cursor.cx--;
+                }
             } else if (cursor.cy > 0) {
                 cursor.cx = buffer.getLineLength(cursor.cy - 1);
                 buffer.joinLines(cursor.cy);
@@ -392,6 +510,32 @@ void Editor::processKeypress() {
 void Editor::run() {
     while (!quit) {
         cursor.clamp(buffer.lines.size(), buffer.getLineLength(cursor.cy));
+
+        struct winsize ws;
+        int s_rows = 24, s_cols = 80;
+        if (ioctl(STDOUT_FILENO, TIOCGWINSZ, &ws) != -1 && ws.ws_col != 0) {
+            s_rows = ws.ws_row - 2;
+            s_cols = ws.ws_col - screen.getGutterWidth(buffer.lines.size());
+        }
+
+        if (cursor.cy < cursor.rowoff) {
+            cursor.rowoff = cursor.cy;
+        }
+        if (cursor.cy >= cursor.rowoff + s_rows) {
+            cursor.rowoff = cursor.cy - s_rows + 1;
+        }
+        if (cursor.cx < cursor.coloff) {
+            cursor.coloff = cursor.cx;
+        }
+        if (cursor.cx >= cursor.coloff + s_cols) {
+            cursor.coloff = cursor.cx - s_cols + 1;
+        }
+
+        if (mode != MODE_COMMAND && mode != MODE_SEARCH) {
+            std::string coords = " Ln " + std::to_string(cursor.cy + 1) + ", Col " + std::to_string(cursor.cx + 1);
+            setStatus(coords);
+        }
+
         screen.refresh(buffer, cursor, filename, status_msg, mode, sel_start_x, sel_start_y, cursor.cx, cursor.cy);
         processKeypress();
     }
