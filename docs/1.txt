@@ -1,0 +1,64 @@
+===============================================================================
+VANO TEXT EDITOR - TECHNICAL ARCHITECTURE & INTERNAL DESIGN
+===============================================================================
+
+1. OVERVIEW
+Vano is designed as a single-threaded, event-driven modal terminal text editor 
+built on top of standard POSIX terminal mechanics using modern C++17. It 
+intentionally operates without heavy cursor libraries like ncurses, choosing 
+instead to communicate with terminal emulators via raw ANSI/VT100 escape 
+sequences.
+
+2. CORE COMPONENT BREAKDOWN
+The execution layout isolates system responsibilities into four core layers:
+
+   [ FileManager ] <---> [ Buffer ] <---> [ Editor ] <---> [ Screen ]
+                                              ^
+                                              |
+                                          [ Input ]
+
+   A. BUFFER ENGINE (buffer.cpp / buffer.hpp)
+      - Data Layout: Houses the raw file data structures as a sequence of 
+        dynamic string rows.
+      - State History: Tracks discrete string state changes to facilitate 
+        unbounded transactional undo and redo stacks.
+      - Processing: Manages direct content alterations, character insertions, 
+        line splitting, block deletions, and inline modifications.
+
+   B. DISPLAY ENGINE (screen.cpp / screen.hpp)
+      - Render Cycle: Draws the view windows, status row, command row, line 
+        number gutters, and text tokens.
+      - Screen Management: Optimizes frame refreshes via vertical and 
+        horizontal scrolling bounds calculations.
+      - Terminal Output: Controls terminal dimensions discovery and translates 
+        screen states into highly efficient ANSI byte-streams.
+
+   C. MAIN EXECUTIVE CONTROL (editor.cpp / editor.hpp)
+      - Event Loop: Orchestrates the central operational state machine loop.
+      - Mode Transitioning: Coordinates state logic switching between standard 
+        typing, modal text alterations, and selection flows.
+      - Operation Logic: Manages complex runtime behaviors including interactive 
+        regex matches, text selection spans, and clipboard manipulation.
+
+   D. STORAGE & CONFIG SYSTEM (file.cpp / file.hpp)
+      - Disk Serialization: Oversees standard safe reads and writes to disk assets.
+      - Security Backup: Drives an background state tracker that serializes active 
+        buffers to secondary ".vano_bak" caches to safeguard data integrity.
+      - RC Parsing: Reads runtime settings by parsing text streams on launch.
+
+3. THE RUNTIME EVENT CYCLE
+Vano runs an uninterrupted loop structured around low-latency system actions:
+   1. Wait synchronously for terminal input sequences via the Input module.
+   2. Evaluate incoming raw character streams and identify complex actions.
+   3. Direct state requests to the Editor state controller.
+   4. Alter underlying lines in the Buffer engine if modifications occur.
+   5. Compute new positional viewing offsets through Screen window logic.
+   6. Write a consolidated frame buffer string block directly into stdout.
+   7. Return to step 1.
+
+4. MEMORY STRATEGY
+Files are loaded directly into RAM using a vector-of-strings layout, ensuring 
+O(1) line lookups and localized access performance. Memory cleanups run 
+deterministically using C++ RAII resource allocations across all operational 
+subsystems.
+===============================================================================
