@@ -20,7 +20,22 @@ int Screen::getGutterWidth(size_t num_lines) const {
 }
 
 void Screen::scroll(Cursor& cursor, const Buffer& buffer) {
-    cursor.rx = 0;
+    int visual_cx = 0;
+    if (cursor.cy >= 0 && cursor.cy < static_cast<int>(buffer.lines.size())) {
+        const std::string& line = buffer.lines[cursor.cy];
+        size_t i = 0;
+        while (i < line.size() && static_cast<int>(i) < cursor.cx) {
+            if (line[i] == '\t') {
+                visual_cx += tab_size;
+                i++;
+            } else {
+                uint32_t cp = decodeUTF8(line, i);
+                visual_cx += getCodepointWidth(cp);
+            }
+        }
+    }
+    cursor.rx = visual_cx;
+
     int gutter = getGutterWidth(buffer.lines.size());
     int usable_cols = screen_cols - gutter;
 
@@ -30,11 +45,11 @@ void Screen::scroll(Cursor& cursor, const Buffer& buffer) {
     if (cursor.cy >= static_cast<int>(cursor.rowoff) + screen_rows) {
         cursor.rowoff = cursor.cy - screen_rows + 1;
     }
-    if (cursor.cx < static_cast<int>(cursor.coloff)) {
-        cursor.coloff = cursor.cx;
+    if (visual_cx < static_cast<int>(cursor.coloff)) {
+        cursor.coloff = visual_cx;
     }
-    if (cursor.cx >= static_cast<int>(cursor.coloff) + usable_cols) {
-        cursor.coloff = cursor.cx - usable_cols + 1;
+    if (visual_cx >= static_cast<int>(cursor.coloff) + usable_cols) {
+        cursor.coloff = visual_cx - usable_cols + 1;
     }
 }
 
@@ -163,13 +178,13 @@ void Screen::drawRows(const Buffer& buffer, const Cursor& cursor, const std::str
                     continue;
                 }
 
-                if (std::isalnum(c) || c == '_') {
+                if (std::isalnum(static_cast<unsigned char>(c)) || c == '_') {
                     current_word += c;
                     current_word_indices.push_back(i);
                 } else {
                     if (!current_word.empty()) {
                         bool is_keyword = std::find(keywords.begin(), keywords.end(), current_word) != keywords.end();
-                        bool is_number = std::isdigit(current_word[0]);
+                        bool is_number = std::isdigit(static_cast<unsigned char>(current_word[0]));
                         std::string color = is_keyword ? "\x1b[32m" : (is_number ? "\x1b[36m" : "");
                         if (!color.empty()) {
                             for (int idx : current_word_indices) {
@@ -183,7 +198,7 @@ void Screen::drawRows(const Buffer& buffer, const Cursor& cursor, const std::str
             }
             if (!current_word.empty()) {
                 bool is_keyword = std::find(keywords.begin(), keywords.end(), current_word) != keywords.end();
-                bool is_number = std::isdigit(current_word[0]);
+                bool is_number = std::isdigit(static_cast<unsigned char>(current_word[0]));
                 std::string color = is_keyword ? "\x1b[32m" : (is_number ? "\x1b[36m" : "");
                 if (!color.empty()) {
                     for (int idx : current_word_indices) {
@@ -192,12 +207,41 @@ void Screen::drawRows(const Buffer& buffer, const Cursor& cursor, const std::str
                 }
             }
 
-            int total_chars = static_cast<int>(buffer.lines[filerow].size());
-            int visible_chars = total_chars - cursor.coloff;
-            if (visible_chars < 0) visible_chars = 0;
-            if (visible_chars > usable_cols) visible_chars = usable_cols;
+            struct VisualCell {
+                std::string bytes;
+                int byte_idx;
+                bool is_tab_pad;
+                int width;
+            };
+            std::vector<VisualCell> cells;
+            for (size_t i = 0; i < buffer.lines[filerow].size();) {
+                if (buffer.lines[filerow][i] == '\t') {
+                    cells.push_back({"\t", static_cast<int>(i), false, tab_size});
+                    for (int t = 1; t < tab_size; ++t) {
+                        cells.push_back({" ", static_cast<int>(i), true, 0});
+                    }
+                    i++;
+                } else {
+                    size_t start_idx = i;
+                    uint32_t cp = decodeUTF8(buffer.lines[filerow], i);
+                    std::string utf8_char = buffer.lines[filerow].substr(start_idx, i - start_idx);
+                    int w = getCodepointWidth(cp);
+                    if (w == 0) {
+                        if (!cells.empty()) {
+                            cells.back().bytes += utf8_char;
+                        } else {
+                            cells.push_back({utf8_char, static_cast<int>(start_idx), false, 0});
+                        }
+                    } else {
+                        cells.push_back({utf8_char, static_cast<int>(start_idx), false, w});
+                        for (int w_idx = 1; w_idx < w; ++w) {
+                            cells.push_back({"", static_cast<int>(start_idx), true, 0});
+                        }
+                    }
+                }
+            }
 
-            if (visible_chars == 0 && mode == MODE_VISUAL) {
+            if (cells.empty() && mode == MODE_VISUAL) {
                 bool is_selected = false;
                 if (filerow > sel_sy && filerow < sel_ey) is_selected = true;
                 else if (filerow == sel_sy && filerow == sel_ey) is_selected = (cursor.coloff >= sel_sx && cursor.coloff <= sel_ex);
@@ -209,29 +253,34 @@ void Screen::drawRows(const Buffer& buffer, const Cursor& cursor, const std::str
                 }
             }
 
-            for (int i = 0; i < visible_chars; i++) {
-                int real_idx = i + cursor.coloff;
-                bool is_selected = false;
+            for (int c = cursor.coloff; c < cursor.coloff + usable_cols; ++c) {
+                if (c < static_cast<int>(cells.size())) {
+                    const auto& cell = cells[c];
+                    int real_idx = cell.byte_idx;
+                    bool is_selected = false;
 
-                if (mode == MODE_VISUAL) {
-                    if (filerow > sel_sy && filerow < sel_ey) is_selected = true;
-                    else if (filerow == sel_sy && filerow == sel_ey) is_selected = (real_idx >= sel_sx && real_idx <= sel_ex);
-                    else if (filerow == sel_sy) is_selected = (real_idx >= sel_sx);
-                    else if (filerow == sel_ey) is_selected = (real_idx <= sel_ex);
+                    if (mode == MODE_VISUAL) {
+                        if (filerow > sel_sy && filerow < sel_ey) is_selected = true;
+                        else if (filerow == sel_sy && filerow == sel_ey) is_selected = (real_idx >= sel_sx && real_idx <= sel_ex);
+                        else if (filerow == sel_sy) is_selected = (real_idx >= sel_sx);
+                        else if (filerow == sel_ey) is_selected = (real_idx <= sel_ex);
+                    }
+
+                    bool is_bracket = (filerow == by && real_idx == bx) || (filerow == cursor.cy && real_idx == cursor.cx && bx != -1);
+                    std::string syntax_color = cell.is_tab_pad ? "" : syntax_colors[real_idx];
+
+                    if (is_selected) output_buffer += "\x1b[7m";
+                    if (is_bracket) output_buffer += "\x1b[1;44m";
+                    if (!is_bracket && !syntax_color.empty()) output_buffer += syntax_color;
+
+                    output_buffer += cell.bytes;
+
+                    if (!is_bracket && !syntax_color.empty()) output_buffer += "\x1b[m";
+                    if (is_bracket) output_buffer += "\x1b[m";
+                    if (is_selected) output_buffer += "\x1b[m";
+                } else {
+                    break;
                 }
-
-                bool is_bracket = (filerow == by && real_idx == bx) || (filerow == cursor.cy && real_idx == cursor.cx && bx != -1);
-                std::string syntax_color = syntax_colors[real_idx];
-
-                if (is_selected) output_buffer += "\x1b[7m";
-                if (is_bracket) output_buffer += "\x1b[1;44m";
-                if (!is_bracket && !syntax_color.empty()) output_buffer += syntax_color;
-
-                output_buffer += buffer.lines[filerow][real_idx];
-
-                if (!is_bracket && !syntax_color.empty()) output_buffer += "\x1b[m";
-                if (is_bracket) output_buffer += "\x1b[m";
-                if (is_selected) output_buffer += "\x1b[m";
             }
         }
         output_buffer += "\x1b[K\r\n";
@@ -285,7 +334,23 @@ void Screen::refresh(const Buffer& buffer, Cursor& cursor, const std::string& fi
     drawMessageBar(status_msg);
     char buf[32];
     int gutter = getGutterWidth(buffer.lines.size());
-    std::snprintf(buf, sizeof(buf), "\x1b[%d;%dH", (cursor.cy - cursor.rowoff) + 1, (cursor.cx - cursor.coloff) + 1 + gutter);
+
+    int visual_cx = 0;
+    if (cursor.cy >= 0 && cursor.cy < static_cast<int>(buffer.lines.size())) {
+        const std::string& line = buffer.lines[cursor.cy];
+        size_t i = 0;
+        while (i < line.size() && static_cast<int>(i) < cursor.cx) {
+            if (line[i] == '\t') {
+                visual_cx += tab_size;
+                i++;
+            } else {
+                uint32_t cp = decodeUTF8(line, i);
+                visual_cx += getCodepointWidth(cp);
+            }
+        }
+    }
+
+    std::snprintf(buf, sizeof(buf), "\x1b[%d;%dH", (cursor.cy - cursor.rowoff) + 1, (visual_cx - cursor.coloff) + 1 + gutter);
     output_buffer += buf;
     output_buffer += "\x1b[?25h";
     write(STDOUT_FILENO, output_buffer.c_str(), output_buffer.size());

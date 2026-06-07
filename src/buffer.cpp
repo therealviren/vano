@@ -6,25 +6,33 @@ Buffer::Buffer() : dirty(false), auto_indent(true) {
 }
 
 void Buffer::insertChar(int y, int x, char c) {
-    if (y < 0 || y >= static_cast<int>(lines.size())) return;
-    if (x < 0 || x > static_cast<int>(lines[y].size())) x = lines[y].size();
-    pushUndo(true, x, y, std::string(1, c));
-    lines[y].insert(x, 1, c);
-    dirty = true;
+    insertStr(y, x, std::string(1, c));
 }
 
 void Buffer::deleteChar(int y, int x) {
+    deleteStr(y, x, 1);
+}
+
+void Buffer::insertStr(int y, int x, const std::string& s) {
+    if (y < 0 || y >= static_cast<int>(lines.size())) return;
+    if (x < 0 || x > static_cast<int>(lines[y].size())) x = lines[y].size();
+    pushUndo(true, x, y, s);
+    lines[y].insert(x, s);
+    dirty = true;
+}
+
+void Buffer::deleteStr(int y, int x, int len) {
     if (y < 0 || y >= static_cast<int>(lines.size())) return;
     if (x < 0 || x >= static_cast<int>(lines[y].size())) return;
-    pushUndo(false, x, y, std::string(1, lines[y][x]));
-    lines[y].erase(x, 1);
+    if (x + len > static_cast<int>(lines[y].size())) len = lines[y].size() - x;
+    pushUndo(false, x, y, lines[y].substr(x, len));
+    lines[y].erase(x, len);
     dirty = true;
 }
 
 void Buffer::insertNewline(int y, int x) {
     if (y < 0 || y >= static_cast<int>(lines.size())) return;
     if (x < 0 || x > static_cast<int>(lines[y].size())) x = lines[y].size();
-
     std::vector<std::string> old_block = { lines[y] };
     std::string split = lines[y].substr(x);
     lines[y] = lines[y].substr(0, x);

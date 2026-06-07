@@ -41,6 +41,8 @@ public:
     Buffer();
     void insertChar(int y, int x, char c);
     void deleteChar(int y, int x);
+    void insertStr(int y, int x, const std::string& s);
+    void deleteStr(int y, int x, int len);
     void insertNewline(int y, int x);
     void joinLines(int y);
     int getLineLength(int y) const;
