@@ -242,10 +242,12 @@ void Screen::drawStatusBar(const Buffer& buffer, const Cursor& cursor, const std
     if (mode == MODE_NORMAL) output_buffer += "\x1b[44;37m";
     else if (mode == MODE_VISUAL) output_buffer += "\x1b[45;37m";
     else if (mode == MODE_SEARCH) output_buffer += "\x1b[42;37m";
+    else if (mode == MODE_COMMAND) output_buffer += "\x1b[46;30m";
 
     std::string mstr = " [NORMAL] ";
     if (mode == MODE_VISUAL) mstr = " [VISUAL] ";
-    if (mode == MODE_SEARCH) mstr = " [SEARCH] ";
+    else if (mode == MODE_SEARCH) mstr = " [SEARCH] ";
+    else if (mode == MODE_COMMAND) mstr = " [COMMAND] ";
 
     std::string fname = filename.empty() ? "[No Name]" : filename;
     std::string status = mstr + fname + " - " + std::to_string(buffer.lines.size()) + " lines" + (buffer.dirty ? " *" : "");

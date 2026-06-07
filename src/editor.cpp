@@ -34,7 +34,7 @@ void Editor::init(const std::string& file_path) {
         std::string backup_path = filename + ".vano_bak";
         if (access(backup_path.c_str(), F_OK) == 0) {
             disableRawMode(state);
-            std::cout << "Herstelbestand (.vano_bak) gedetecteerd. Wilt u dit herstellen? (y/n): ";
+            std::cout << "Backup file (.vano_bak) detected. Would you like to restore it? (y/n): ";
             char response;
             std::cin >> response;
             enableRawMode(state);
@@ -46,7 +46,7 @@ void Editor::init(const std::string& file_path) {
                     buffer.lines.push_back(bline);
                 }
                 buffer.dirty = true;
-                setStatus("Hersteld van backup.");
+                setStatus("Restored from backup.");
             } else {
                 FileManager::openFile(buffer, filename);
                 setStatus("Opened file: " + filename);
@@ -148,22 +148,41 @@ void Editor::executeCommand(const std::string& cmd_str) {
             break;
         case CommandType::SET_TAB:
             if (!cmd.args.empty()) {
-                screen.tab_size = std::stoi(cmd.args[0]);
+                try {
+                    screen.tab_size = std::stoi(cmd.args[0]);
+                } catch (...) {
+                    setStatus("Invalid tab size value.");
+                }
             }
             break;
         case CommandType::SYNTAX:
             break;
         case CommandType::GOTO:
             if (!cmd.args.empty()) {
-                int target_line = std::stoi(cmd.args[0]) - 1;
-                if (target_line >= 0 && target_line < static_cast<int>(buffer.lines.size())) {
-                    cursor.cy = target_line;
-                    cursor.cx = 0;
+                try {
+                    int target_line = -1;
+                    for (const auto& arg : cmd.args) {
+                        if (!arg.empty() && std::all_of(arg.begin(), arg.end(), ::isdigit)) {
+                            target_line = std::stoi(arg) - 1;
+                            break;
+                        }
+                    }
+                    if (target_line == -1) {
+                        target_line = std::stoi(cmd.args[0]) - 1;
+                    }
+                    if (target_line >= 0 && target_line < static_cast<int>(buffer.lines.size())) {
+                        cursor.cy = target_line;
+                        cursor.cx = 0;
+                    } else {
+                        setStatus("Line number out of range.");
+                    }
+                } catch (...) {
+                    setStatus("Invalid line number format.");
                 }
             }
             break;
         default:
-            setStatus("Unknown command.");
+            setStatus("Unknown or unhandled command configuration.");
             break;
     }
 }
@@ -495,8 +514,24 @@ void Editor::processKeypress() {
             break;
         default:
             if (!std::iscntrl(c) && c < 128) {
-                buffer.insertChar(cursor.cy, cursor.cx, c);
-                cursor.cx++;
+                if (c == '(' || c == '{' || c == '[' || c == '"' || c == '\'') {
+                    char closing = 0;
+                    if (c == '(') closing = ')';
+                    else if (c == '{') closing = '}';
+                    else if (c == '[') closing = ']';
+                    else closing = c;
+
+                    buffer.insertChar(cursor.cy, cursor.cx, c);
+                    cursor.cx++;
+                    buffer.insertChar(cursor.cy, cursor.cx, closing);
+                } else if ((c == ')' || c == '}' || c == ']' || c == '"' || c == '\'') &&
+                           cursor.cx < buffer.getLineLength(cursor.cy) &&
+                           buffer.lines[cursor.cy][cursor.cx] == c) {
+                    cursor.cx++;
+                } else {
+                    buffer.insertChar(cursor.cy, cursor.cx, c);
+                    cursor.cx++;
+                }
             }
             break;
     }
@@ -527,13 +562,8 @@ void Editor::run() {
         if (cursor.cx < cursor.coloff) {
             cursor.coloff = cursor.cx;
         }
-        if (cursor.cx >= cursor.coloff + s_cols) {
+        if (cursor.cx >= static_cast<int>(cursor.coloff) + s_cols) {
             cursor.coloff = cursor.cx - s_cols + 1;
-        }
-
-        if (mode != MODE_COMMAND && mode != MODE_SEARCH) {
-            std::string coords = " Ln " + std::to_string(cursor.cy + 1) + ", Col " + std::to_string(cursor.cx + 1);
-            setStatus(coords);
         }
 
         screen.refresh(buffer, cursor, filename, status_msg, mode, sel_start_x, sel_start_y, cursor.cx, cursor.cy);
