@@ -1,6 +1,6 @@
 #ifndef VERSION_HPP
 #define VERSION_HPP
 
-#define VANO_VERSION "1.4.3"
+#define VANO_VERSION "1.4.4"
 
 #endif
