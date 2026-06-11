@@ -102,12 +102,12 @@ void Editor::handleMouse(int mx, int my, int mb) {
 
         if (target_row >= 0 && target_row < static_cast<int>(buffer.lines.size())) {
             cursor.cy = target_row;
-            if (target_col >= 0 && target_col <= static_cast<int>(buffer.lines[cursor.cy].size())) {
+            if (target_col >= 0 && target_col <= static_cast<int>(buffer.lines[static_cast<size_t>(cursor.cy)].size())) {
                 cursor.cx = target_col;
             } else if (target_col < 0) {
                 cursor.cx = 0;
             } else {
-                cursor.cx = buffer.lines[cursor.cy].size();
+                cursor.cx = static_cast<int>(buffer.lines[static_cast<size_t>(cursor.cy)].size());
             }
         }
     }
@@ -119,7 +119,7 @@ void Editor::moveCursor(int key) {
         case ARROW_LEFT:
             if (cursor.cx > 0) {
                 cursor.cx--;
-                while (cursor.cx > 0 && (buffer.lines[cursor.cy][cursor.cx] & 0xC0) == 0x80) {
+                while (cursor.cx > 0 && (buffer.lines[static_cast<size_t>(cursor.cy)][static_cast<size_t>(cursor.cx)] & 0xC0) == 0x80) {
                     cursor.cx--;
                 }
             } else if (cursor.cy > 0) {
@@ -130,7 +130,7 @@ void Editor::moveCursor(int key) {
         case ARROW_RIGHT:
             if (cursor.cx < line_len) {
                 cursor.cx++;
-                while (cursor.cx < line_len && (buffer.lines[cursor.cy][cursor.cx] & 0xC0) == 0x80) {
+                while (cursor.cx < line_len && (buffer.lines[static_cast<size_t>(cursor.cy)][static_cast<size_t>(cursor.cx)] & 0xC0) == 0x80) {
                     cursor.cx++;
                 }
             } else if (cursor.cy < static_cast<int>(buffer.lines.size()) - 1) {
@@ -147,7 +147,7 @@ void Editor::moveCursor(int key) {
     }
     line_len = buffer.getLineLength(cursor.cy);
     if (cursor.cx > line_len) cursor.cx = line_len;
-    while (cursor.cx > 0 && cursor.cx < line_len && (buffer.lines[cursor.cy][cursor.cx] & 0xC0) == 0x80) {
+    while (cursor.cx > 0 && cursor.cx < line_len && (buffer.lines[static_cast<size_t>(cursor.cy)][static_cast<size_t>(cursor.cx)] & 0xC0) == 0x80) {
         cursor.cx--;
     }
 }
@@ -260,15 +260,15 @@ void Editor::executeCommand(const std::string& cmd_str) {
             break;
         case CommandType::COPY:
             clipboard.clear();
-            clipboard.push_back(buffer.lines[cursor.cy]);
+            clipboard.push_back(buffer.lines[static_cast<size_t>(cursor.cy)]);
             setStatus("Current line copied to clipboard.");
             break;
         case CommandType::CUT:
             clipboard.clear();
-            clipboard.push_back(buffer.lines[cursor.cy]);
+            clipboard.push_back(buffer.lines[static_cast<size_t>(cursor.cy)]);
             buffer.lines.erase(buffer.lines.begin() + cursor.cy);
             if (buffer.lines.empty()) buffer.lines.push_back("");
-            if (cursor.cy >= static_cast<int>(buffer.lines.size())) cursor.cy = buffer.lines.size() - 1;
+            if (cursor.cy >= static_cast<int>(buffer.lines.size())) cursor.cy = static_cast<int>(buffer.lines.size()) - 1;
             cursor.cx = 0;
             buffer.dirty = true;
             setStatus("Current line cut to clipboard.");
@@ -277,16 +277,16 @@ void Editor::executeCommand(const std::string& cmd_str) {
             if (!clipboard.empty()) {
                 if (clipboard.size() == 1) {
                     buffer.insertStr(cursor.cy, cursor.cx, clipboard[0]);
-                    cursor.cx += clipboard[0].size();
+                    cursor.cx += static_cast<int>(clipboard[0].size());
                 } else {
-                    std::string rem = buffer.lines[cursor.cy].substr(cursor.cx);
-                    buffer.lines[cursor.cy] = buffer.lines[cursor.cy].substr(0, cursor.cx) + clipboard[0];
+                    std::string rem = buffer.lines[static_cast<size_t>(cursor.cy)].substr(static_cast<size_t>(cursor.cx));
+                    buffer.lines[static_cast<size_t>(cursor.cy)] = buffer.lines[static_cast<size_t>(cursor.cy)].substr(0, static_cast<size_t>(cursor.cx)) + clipboard[0];
                     for (size_t i = 1; i < clipboard.size() - 1; ++i) {
-                        buffer.lines.insert(buffer.lines.begin() + cursor.cy + i, clipboard[i]);
+                        buffer.lines.insert(buffer.lines.begin() + cursor.cy + static_cast<int>(i), clipboard[i]);
                     }
-                    buffer.lines.insert(buffer.lines.begin() + cursor.cy + clipboard.size() - 1, clipboard.back() + rem);
-                    cursor.cy += clipboard.size() - 1;
-                    cursor.cx = clipboard.back().size();
+                    buffer.lines.insert(buffer.lines.begin() + cursor.cy + static_cast<int>(clipboard.size()) - 1, clipboard.back() + rem);
+                    cursor.cy += static_cast<int>(clipboard.size()) - 1;
+                    cursor.cx = static_cast<int>(clipboard.back().size());
                 }
                 buffer.dirty = true;
                 setStatus("Pasted data from clipboard.");
@@ -340,12 +340,12 @@ void Editor::executeCommand(const std::string& cmd_str) {
             break;
         }
         case CommandType::UPPERCASE:
-            for (char &c : buffer.lines[cursor.cy]) c = std::toupper(static_cast<unsigned char>(c));
+            for (char &c : buffer.lines[static_cast<size_t>(cursor.cy)]) c = static_cast<char>(std::toupper(static_cast<unsigned char>(c)));
             buffer.dirty = true;
             setStatus("Line modified to uppercase formatting.");
             break;
         case CommandType::LOWERCASE:
-            for (char &c : buffer.lines[cursor.cy]) c = std::tolower(static_cast<unsigned char>(c));
+            for (char &c : buffer.lines[static_cast<size_t>(cursor.cy)]) c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
             buffer.dirty = true;
             setStatus("Line modified to lowercase formatting.");
             break;
@@ -384,7 +384,7 @@ void Editor::executeCommand(const std::string& cmd_str) {
             char dbuf[64];
             std::strftime(dbuf, sizeof(dbuf), "%Y-%m-%d", current_time_data);
             buffer.insertStr(cursor.cy, cursor.cx, dbuf);
-            cursor.cx += std::string(dbuf).size();
+            cursor.cx += static_cast<int>(std::string(dbuf).size());
             buffer.dirty = true;
             break;
         }
@@ -394,7 +394,7 @@ void Editor::executeCommand(const std::string& cmd_str) {
             char tbuf[64];
             std::strftime(tbuf, sizeof(tbuf), "%H:%M:%S", current_time_data);
             buffer.insertStr(cursor.cy, cursor.cx, tbuf);
-            cursor.cx += std::string(tbuf).size();
+            cursor.cx += static_cast<int>(std::string(tbuf).size());
             buffer.dirty = true;
             break;
         }
@@ -499,14 +499,14 @@ void Editor::executeCommand(const std::string& cmd_str) {
             break;
         }
         case CommandType::FORCE_INDENT:
-            buffer.insertStr(cursor.cy, 0, std::string(screen.tab_size, ' '));
+            buffer.insertStr(cursor.cy, 0, std::string(static_cast<size_t>(screen.tab_size), ' '));
             cursor.cx += screen.tab_size;
             buffer.dirty = true;
             setStatus("Forced indentation layout updated.");
             break;
         case CommandType::FORCE_UNINDENT: {
             int items_removed = 0;
-            while (items_removed < screen.tab_size && !buffer.lines[cursor.cy].empty() && buffer.lines[cursor.cy][0] == ' ') {
+            while (items_removed < screen.tab_size && !buffer.lines[static_cast<size_t>(cursor.cy)].empty() && buffer.lines[static_cast<size_t>(cursor.cy)][0] == ' ') {
                 buffer.deleteStr(cursor.cy, 0, 1);
                 items_removed++;
             }
@@ -541,12 +541,12 @@ void Editor::findAndReplace() {
         screen.refresh(buffer, cursor, filename, status_msg, mode, 0, 0, 0, 0);
         int mx = 0, my = 0, mb = 0;
         int c = readKey(mx, my, mb);
-        
-        if (mb > 0) continue; 
-        
+
+        if (mb > 0) continue;
+
         if (c == '\x1b') { setStatus(""); mode = old_mode; return; }
         else if (c == '\r' || c == '\n') break;
-        else if (c == BACKSPACE || c == DEL_KEY || c == 127 || c == 8) { 
+        else if (c == BACKSPACE || c == DEL_KEY || c == 127 || c == 8) {
             if (!pattern.empty()) {
                 while (!pattern.empty() && (pattern.back() & 0xC0) == 0x80) pattern.pop_back();
                 if (!pattern.empty()) pattern.pop_back();
@@ -560,12 +560,12 @@ void Editor::findAndReplace() {
         screen.refresh(buffer, cursor, filename, status_msg, mode, 0, 0, 0, 0);
         int mx = 0, my = 0, mb = 0;
         int c = readKey(mx, my, mb);
-        
+
         if (mb > 0) continue;
-        
+
         if (c == '\x1b') { setStatus(""); mode = old_mode; return; }
         else if (c == '\r' || c == '\n') break;
-        else if (c == BACKSPACE || c == DEL_KEY || c == 127 || c == 8) { 
+        else if (c == BACKSPACE || c == DEL_KEY || c == 127 || c == 8) {
             if (!replace.empty()) {
                 while (!replace.empty() && (replace.back() & 0xC0) == 0x80) replace.pop_back();
                 if (!replace.empty()) replace.pop_back();
@@ -584,23 +584,23 @@ void Editor::findAndReplace() {
             size_t search_offset = 0;
 
             while (std::regex_search(current_line.cbegin() + search_offset, current_line.cend(), match, target_regex)) {
-                size_t match_pos = search_offset + match.position(0);
-                cursor.cy = i;
-                cursor.cx = match_pos;
+                size_t match_pos = search_offset + static_cast<size_t>(match.position(0));
+                cursor.cy = static_cast<int>(i);
+                cursor.cx = static_cast<int>(match_pos);
 
                 if (!replace_all) {
                     setStatus("Replace match? (y: Yes, n: No, a: All, q: Quit)");
-                    screen.refresh(buffer, cursor, filename, status_msg, mode, match_pos, i, match_pos + match.length(0) - 1, i);
+                    screen.refresh(buffer, cursor, filename, status_msg, mode, static_cast<int>(match_pos), static_cast<int>(i), static_cast<int>(match_pos + static_cast<size_t>(match.length(0)) - 1), static_cast<int>(i));
                     int mx = 0, my = 0, mb = 0;
                     int choice = readKey(mx, my, mb);
                     if (choice == 'q' || choice == '\x1b') { setStatus("Cancelled."); mode = old_mode; return; }
                     if (choice == 'a') replace_all = true;
                     if (choice == 'y' || replace_all) {
-                        std::string updated = current_line.substr(0, match_pos) + replace + current_line.substr(match_pos + match.length(0));
+                        std::string updated = current_line.substr(0, match_pos) + replace + current_line.substr(match_pos + static_cast<size_t>(match.length(0)));
                         std::vector<std::string> old_blk = { buffer.lines[i] };
                         buffer.lines[i] = updated;
                         std::vector<std::string> new_blk = { updated };
-                        buffer.pushBlockUndo(i, i, old_blk, new_blk, match_pos, i, match_pos + replace.size(), i, UndoType::BLOCK_REPLACE);
+                        buffer.pushBlockUndo(static_cast<int>(i), static_cast<int>(i), old_blk, new_blk, static_cast<int>(match_pos), static_cast<int>(i), static_cast<int>(match_pos + replace.size()), static_cast<int>(i), UndoType::BLOCK_REPLACE);
 
                         current_line = updated;
                         search_offset = match_pos + replace.size();
@@ -611,11 +611,11 @@ void Editor::findAndReplace() {
                         continue;
                     }
                 } else {
-                    std::string updated = current_line.substr(0, match_pos) + replace + current_line.substr(match_pos + match.length(0));
+                    std::string updated = current_line.substr(0, match_pos) + replace + current_line.substr(match_pos + static_cast<size_t>(match.length(0)));
                     std::vector<std::string> old_blk = { buffer.lines[i] };
                     buffer.lines[i] = updated;
                     std::vector<std::string> new_blk = { updated };
-                    buffer.pushBlockUndo(i, i, old_blk, new_blk, match_pos, i, match_pos + replace.size(), i, UndoType::BLOCK_REPLACE);
+                    buffer.pushBlockUndo(static_cast<int>(i), static_cast<int>(i), old_blk, new_blk, static_cast<int>(match_pos), static_cast<int>(i), static_cast<int>(match_pos + replace.size()), static_cast<int>(i), UndoType::BLOCK_REPLACE);
 
                     current_line = updated;
                     search_offset = match_pos + replace.size();
@@ -625,7 +625,7 @@ void Editor::findAndReplace() {
                     buffer.dirty = true;
                     continue;
                 }
-                search_offset = match_pos + (match.length(0) > 0 ? match.length(0) : 1);
+                search_offset = match_pos + (match.length(0) > 0 ? static_cast<size_t>(match.length(0)) : 1);
             }
         }
     } catch (...) {
@@ -646,7 +646,7 @@ void Editor::processKeypress() {
     if (c == '\x1b') {
         int bytes_avail = 0;
         int retries = 5;
-        
+
         while (retries-- > 0) {
             if (ioctl(STDIN_FILENO, FIONREAD, &bytes_avail) == 0 && bytes_avail > 0) break;
             usleep(1000);
@@ -656,14 +656,14 @@ void Editor::processKeypress() {
             std::string seq;
             while (ioctl(STDIN_FILENO, FIONREAD, &bytes_avail) == 0 && bytes_avail > 0) {
                 int dx = 0, dy = 0, db = 0;
-                char next_c = readKey(dx, dy, db);
+                char next_c = static_cast<char>(readKey(dx, dy, db));
                 seq += next_c;
-                
+
                 if (seq.size() >= 2 && seq[0] == '[' && seq[1] == 'M') {
                     if (seq.size() == 5) break;
                     continue;
                 }
-                
+
                 if (std::isalpha(static_cast<unsigned char>(next_c)) || next_c == '~') {
                     if (!(seq.size() >= 2 && seq[0] == '[' && seq[1] == 'M')) {
                         break;
@@ -712,7 +712,7 @@ void Editor::processKeypress() {
             } else if (seq == "[3~") {
                 if (cursor.cx < buffer.getLineLength(cursor.cy)) {
                     int bytes_to_delete = 1;
-                    while (cursor.cx + bytes_to_delete < buffer.getLineLength(cursor.cy) && (buffer.lines[cursor.cy][cursor.cx + bytes_to_delete] & 0xC0) == 0x80) {
+                    while (cursor.cx + bytes_to_delete < buffer.getLineLength(cursor.cy) && (buffer.lines[static_cast<size_t>(cursor.cy)][static_cast<size_t>(cursor.cx + bytes_to_delete)] & 0xC0) == 0x80) {
                         bytes_to_delete++;
                     }
                     buffer.deleteStr(cursor.cy, cursor.cx, bytes_to_delete);
@@ -757,7 +757,7 @@ void Editor::processKeypress() {
             if (cursor.cx >= screen.tab_size) {
                 bool structural_tab = true;
                 for (int i = 1; i <= screen.tab_size; ++i) {
-                    if (buffer.lines[cursor.cy][cursor.cx - i] != ' ') {
+                    if (buffer.lines[static_cast<size_t>(cursor.cy)][static_cast<size_t>(cursor.cx - i)] != ' ') {
                         structural_tab = false;
                         break;
                     }
@@ -769,7 +769,7 @@ void Editor::processKeypress() {
                 cursor.cx -= spaces;
             } else {
                 int bytes_to_delete = 1;
-                while (cursor.cx - bytes_to_delete > 0 && (buffer.lines[cursor.cy][cursor.cx - bytes_to_delete] & 0xC0) == 0x80) {
+                while (cursor.cx - bytes_to_delete > 0 && (buffer.lines[static_cast<size_t>(cursor.cy)][static_cast<size_t>(cursor.cx - bytes_to_delete)] & 0xC0) == 0x80) {
                     bytes_to_delete++;
                 }
                 buffer.deleteStr(cursor.cy, cursor.cx - bytes_to_delete, bytes_to_delete);
@@ -788,7 +788,7 @@ void Editor::processKeypress() {
                 setStatus(":");
                 break;
             case TAB_KEY: {
-                buffer.insertStr(cursor.cy, cursor.cx, std::string(screen.tab_size, ' '));
+                buffer.insertStr(cursor.cy, cursor.cx, std::string(static_cast<size_t>(screen.tab_size), ' '));
                 cursor.cx += screen.tab_size;
                 break;
             }
@@ -816,9 +816,9 @@ void Editor::processKeypress() {
                         screen.refresh(buffer, cursor, temp_name, status_msg, mode, 0, 0, 0, 0);
                         int smx = 0, smy = 0, smb = 0;
                         int sc = readKey(smx, smy, smb);
-                        
+
                         if (smb > 0) continue;
-                        
+
                         if (sc == '\r' || sc == '\n') {
                             filename = temp_name;
                             break;
@@ -876,18 +876,18 @@ void Editor::processKeypress() {
                     int sy = sel_start_y, ey = cursor.cy, sx = sel_start_x, ex = cursor.cx;
                     if (sy > ey || (sy == ey && sx > ex)) { std::swap(sy, ey); std::swap(sx, ex); }
                     for (int i = sy; i <= ey; ++i) {
-                        int len = static_cast<int>(buffer.lines[i].size());
+                        int len = static_cast<int>(buffer.lines[static_cast<size_t>(i)].size());
                         if (i == sy && i == ey) {
                             int valid_sx = std::min(sx, len);
-                            clipboard.push_back(buffer.lines[i].substr(valid_sx, ex - valid_sx + 1));
+                            clipboard.push_back(buffer.lines[static_cast<size_t>(i)].substr(static_cast<size_t>(valid_sx), static_cast<size_t>(ex - valid_sx + 1)));
                         } else if (i == sy) {
                             int valid_sx = std::min(sx, len);
-                            clipboard.push_back(buffer.lines[i].substr(valid_sx));
+                            clipboard.push_back(buffer.lines[static_cast<size_t>(i)].substr(static_cast<size_t>(valid_sx)));
                         } else if (i == ey) {
                             int valid_ex = std::min(ex + 1, len);
-                            clipboard.push_back(buffer.lines[i].substr(0, valid_ex));
+                            clipboard.push_back(buffer.lines[static_cast<size_t>(i)].substr(0, static_cast<size_t>(valid_ex)));
                         } else {
-                            clipboard.push_back(buffer.lines[i]);
+                            clipboard.push_back(buffer.lines[static_cast<size_t>(i)]);
                         }
                     }
                     mode = MODE_NORMAL;
@@ -902,36 +902,36 @@ void Editor::processKeypress() {
 
                     std::vector<std::string> old_block;
                     for (int i = sy; i <= ey; ++i) {
-                        old_block.push_back(buffer.lines[i]);
+                        old_block.push_back(buffer.lines[static_cast<size_t>(i)]);
                     }
 
                     for (int i = sy; i <= ey; ++i) {
-                        int len = static_cast<int>(buffer.lines[i].size());
+                        int len = static_cast<int>(buffer.lines[static_cast<size_t>(i)].size());
                         if (i == sy && i == ey) {
                             int valid_sx = std::min(sx, len);
-                            clipboard.push_back(buffer.lines[i].substr(valid_sx, ex - valid_sx + 1));
+                            clipboard.push_back(buffer.lines[static_cast<size_t>(i)].substr(static_cast<size_t>(valid_sx), static_cast<size_t>(ex - valid_sx + 1)));
                         } else if (i == sy) {
                             int valid_sx = std::min(sx, len);
-                            clipboard.push_back(buffer.lines[i].substr(valid_sx));
+                            clipboard.push_back(buffer.lines[static_cast<size_t>(i)].substr(static_cast<size_t>(valid_sx)));
                         } else if (i == ey) {
                             int valid_ex = std::min(ex + 1, len);
-                            clipboard.push_back(buffer.lines[i].substr(0, valid_ex));
+                            clipboard.push_back(buffer.lines[static_cast<size_t>(i)].substr(0, static_cast<size_t>(valid_ex)));
                         } else {
-                            clipboard.push_back(buffer.lines[i]);
+                            clipboard.push_back(buffer.lines[static_cast<size_t>(i)]);
                         }
                     }
 
-                    int len_sy = static_cast<int>(buffer.lines[sy].size());
-                    int len_ey = static_cast<int>(buffer.lines[ey].size());
+                    int len_sy = static_cast<int>(buffer.lines[static_cast<size_t>(sy)].size());
+                    int len_ey = static_cast<int>(buffer.lines[static_cast<size_t>(ey)].size());
                     int valid_sx = std::min(sx, len_sy);
-                    std::string trailing_remainder = (ex + 1 <= len_ey) ? buffer.lines[ey].substr(ex + 1) : "";
-                    buffer.lines[sy] = buffer.lines[sy].substr(0, valid_sx) + trailing_remainder;
+                    std::string trailing_remainder = (ex + 1 <= len_ey) ? buffer.lines[static_cast<size_t>(ey)].substr(static_cast<size_t>(ex + 1)) : "";
+                    buffer.lines[static_cast<size_t>(sy)] = buffer.lines[static_cast<size_t>(sy)].substr(0, static_cast<size_t>(valid_sx)) + trailing_remainder;
 
                     if (sy != ey) {
                         buffer.lines.erase(buffer.lines.begin() + sy + 1, buffer.lines.begin() + ey + 1);
                     }
 
-                    std::vector<std::string> new_block = { buffer.lines[sy] };
+                    std::vector<std::string> new_block = { buffer.lines[static_cast<size_t>(sy)] };
                     buffer.pushBlockUndo(sy, ey, old_block, new_block, cursor.cx, cursor.cy, sx, sy, UndoType::BLOCK_REPLACE);
 
                     cursor.cx = sx;
@@ -943,7 +943,7 @@ void Editor::processKeypress() {
                 break;
             case CTRL_KEY('p'):
                 if (!clipboard.empty()) {
-                    std::vector<std::string> old_block = { buffer.lines[cursor.cy] };
+                    std::vector<std::string> old_block = { buffer.lines[static_cast<size_t>(cursor.cy)] };
                     int old_cx = cursor.cx;
                     int old_cy = cursor.cy;
                     int new_cx = cursor.cx;
@@ -951,25 +951,25 @@ void Editor::processKeypress() {
 
                     if (clipboard.size() == 1) {
                         buffer.insertStr(cursor.cy, cursor.cx, clipboard[0]);
-                        new_cx += clipboard[0].size();
-                        std::vector<std::string> new_block = { buffer.lines[cursor.cy] };
+                        new_cx += static_cast<int>(clipboard[0].size());
+                        std::vector<std::string> new_block = { buffer.lines[static_cast<size_t>(cursor.cy)] };
                         buffer.pushBlockUndo(old_cy, old_cy, old_block, new_block, old_cx, old_cy, new_cx, new_cy, UndoType::BLOCK_REPLACE);
                     } else {
-                        std::string remaining = buffer.lines[cursor.cy].substr(cursor.cx);
-                        buffer.lines[cursor.cy] = buffer.lines[cursor.cy].substr(0, cursor.cx) + clipboard[0];
+                        std::string remaining = buffer.lines[static_cast<size_t>(cursor.cy)].substr(static_cast<size_t>(cursor.cx));
+                        buffer.lines[static_cast<size_t>(cursor.cy)] = buffer.lines[static_cast<size_t>(cursor.cy)].substr(0, static_cast<size_t>(cursor.cx)) + clipboard[0];
                         for (size_t i = 1; i < clipboard.size() - 1; ++i) {
-                            buffer.lines.insert(buffer.lines.begin() + cursor.cy + i, clipboard[i]);
+                            buffer.lines.insert(buffer.lines.begin() + cursor.cy + static_cast<int>(i), clipboard[i]);
                         }
-                        buffer.lines.insert(buffer.lines.begin() + cursor.cy + clipboard.size() - 1, clipboard.back() + remaining);
+                        buffer.lines.insert(buffer.lines.begin() + cursor.cy + static_cast<int>(clipboard.size()) - 1, clipboard.back() + remaining);
 
-                        new_cy += clipboard.size() - 1;
-                        new_cx = clipboard.back().size();
+                        new_cy += static_cast<int>(clipboard.size()) - 1;
+                        new_cx = static_cast<int>(clipboard.back().size());
 
                         std::vector<std::string> new_block;
                         for (size_t i = 0; i < clipboard.size(); ++i) {
-                            new_block.push_back(buffer.lines[old_cy + i]);
+                            new_block.push_back(buffer.lines[static_cast<size_t>(old_cy) + i]);
                         }
-                        buffer.pushBlockUndo(old_cy, old_cy + clipboard.size() - 1, old_block, new_block, old_cx, old_cy, new_cx, new_cy, UndoType::BLOCK_REPLACE);
+                        buffer.pushBlockUndo(old_cy, old_cy + static_cast<int>(clipboard.size()) - 1, old_block, new_block, old_cx, old_cy, new_cx, new_cy, UndoType::BLOCK_REPLACE);
                     }
                     cursor.cy = new_cy;
                     cursor.cx = new_cx;
@@ -979,7 +979,7 @@ void Editor::processKeypress() {
             case DEL_KEY:
                 if (cursor.cx < buffer.getLineLength(cursor.cy)) {
                     int bytes_to_delete = 1;
-                    while (cursor.cx + bytes_to_delete < buffer.getLineLength(cursor.cy) && (buffer.lines[cursor.cy][cursor.cx + bytes_to_delete] & 0xC0) == 0x80) {
+                    while (cursor.cx + bytes_to_delete < buffer.getLineLength(cursor.cy) && (buffer.lines[static_cast<size_t>(cursor.cy)][static_cast<size_t>(cursor.cx + bytes_to_delete)] & 0xC0) == 0x80) {
                         bytes_to_delete++;
                     }
                     buffer.deleteStr(cursor.cy, cursor.cx, bytes_to_delete);
@@ -1027,7 +1027,7 @@ void Editor::processKeypress() {
                             buffer.insertStr(cursor.cy, cursor.cx, std::string(1, closing));
                         } else if ((ch == ')' || ch == '}' || ch == ']' || ch == '"' || ch == '\'') &&
                                    cursor.cx < buffer.getLineLength(cursor.cy) &&
-                                   buffer.lines[cursor.cy][cursor.cx] == ch) {
+                                   buffer.lines[static_cast<size_t>(cursor.cy)][static_cast<size_t>(cursor.cx)] == ch) {
                             cursor.cx++;
                         } else {
                             buffer.insertStr(cursor.cy, cursor.cx, std::string(1, ch));
@@ -1035,7 +1035,7 @@ void Editor::processKeypress() {
                         }
                     } else {
                         buffer.insertStr(cursor.cy, cursor.cx, utf8_char);
-                        cursor.cx += utf8_char.size();
+                        cursor.cx += static_cast<int>(utf8_char.size());
                     }
                 }
                 break;
@@ -1050,7 +1050,7 @@ void Editor::processKeypress() {
 
 void Editor::run() {
     while (!quit) {
-        cursor.clamp(buffer.lines.size(), buffer.getLineLength(cursor.cy));
+        cursor.clamp(static_cast<int>(buffer.lines.size()), buffer.getLineLength(cursor.cy));
 
         struct winsize ws;
         int s_rows = 24, s_cols = 80;
@@ -1068,7 +1068,7 @@ void Editor::run() {
 
         int visual_cx = 0;
         if (cursor.cy < static_cast<int>(buffer.lines.size())) {
-            const std::string& line = buffer.lines[cursor.cy];
+            const std::string& line = buffer.lines[static_cast<size_t>(cursor.cy)];
             size_t i = 0;
             while (i < line.size() && static_cast<int>(i) < cursor.cx) {
                 if (line[i] == '\t') {
@@ -1088,7 +1088,14 @@ void Editor::run() {
             cursor.coloff = visual_cx - s_cols + 1;
         }
 
-        screen.refresh(buffer, cursor, filename, status_msg, mode, sel_start_x, sel_start_y, cursor.cx, cursor.cy);
+        int bytes_pending = 0;
+        if (ioctl(STDIN_FILENO, FIONREAD, &bytes_pending) == -1) {
+            bytes_pending = 0;
+        }
+
+        if (bytes_pending == 0) {
+            screen.refresh(buffer, cursor, filename, status_msg, mode, sel_start_x, sel_start_y, cursor.cx, cursor.cy);
+        }
         processKeypress();
     }
     disableRawMode(state);

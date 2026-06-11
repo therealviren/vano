@@ -15,31 +15,31 @@ void Buffer::deleteChar(int y, int x) {
 
 void Buffer::insertStr(int y, int x, const std::string& s) {
     if (y < 0 || y >= static_cast<int>(lines.size())) return;
-    if (x < 0 || x > static_cast<int>(lines[y].size())) x = lines[y].size();
+    if (x < 0 || x > static_cast<int>(lines[static_cast<size_t>(y)].size())) x = static_cast<int>(lines[static_cast<size_t>(y)].size());
     pushUndo(true, x, y, s);
-    lines[y].insert(x, s);
+    lines[static_cast<size_t>(y)].insert(static_cast<size_t>(x), s);
     dirty = true;
 }
 
 void Buffer::deleteStr(int y, int x, int len) {
     if (y < 0 || y >= static_cast<int>(lines.size())) return;
-    if (x < 0 || x >= static_cast<int>(lines[y].size())) return;
-    if (x + len > static_cast<int>(lines[y].size())) len = lines[y].size() - x;
-    pushUndo(false, x, y, lines[y].substr(x, len));
-    lines[y].erase(x, len);
+    if (x < 0 || x >= static_cast<int>(lines[static_cast<size_t>(y)].size())) return;
+    if (x + len > static_cast<int>(lines[static_cast<size_t>(y)].size())) len = static_cast<int>(lines[static_cast<size_t>(y)].size()) - x;
+    pushUndo(false, x, y, lines[static_cast<size_t>(y)].substr(static_cast<size_t>(x), static_cast<size_t>(len)));
+    lines[static_cast<size_t>(y)].erase(static_cast<size_t>(x), static_cast<size_t>(len));
     dirty = true;
 }
 
 void Buffer::insertNewline(int y, int x) {
     if (y < 0 || y >= static_cast<int>(lines.size())) return;
-    if (x < 0 || x > static_cast<int>(lines[y].size())) x = lines[y].size();
-    std::vector<std::string> old_block = { lines[y] };
-    std::string split = lines[y].substr(x);
-    lines[y] = lines[y].substr(0, x);
+    if (x < 0 || x > static_cast<int>(lines[static_cast<size_t>(y)].size())) x = static_cast<int>(lines[static_cast<size_t>(y)].size());
+    std::vector<std::string> old_block = { lines[static_cast<size_t>(y)] };
+    std::string split = lines[static_cast<size_t>(y)].substr(static_cast<size_t>(x));
+    lines[static_cast<size_t>(y)] = lines[static_cast<size_t>(y)].substr(0, static_cast<size_t>(x));
 
     std::string indent = "";
     if (auto_indent) {
-        for (char c : lines[y]) {
+        for (char c : lines[static_cast<size_t>(y)]) {
             if (c == ' ' || c == '\t') indent += c;
             else break;
         }
@@ -47,27 +47,27 @@ void Buffer::insertNewline(int y, int x) {
 
     lines.insert(lines.begin() + y + 1, indent + split);
 
-    std::vector<std::string> new_block = { lines[y], lines[y + 1] };
+    std::vector<std::string> new_block = { lines[static_cast<size_t>(y)], lines[static_cast<size_t>(y + 1)] };
     pushBlockUndo(y, y + 1, old_block, new_block, x, y, 0, y + 1, UndoType::NEWLINE);
     dirty = true;
 }
 
 void Buffer::joinLines(int y) {
     if (y <= 0 || y >= static_cast<int>(lines.size())) return;
-    std::vector<std::string> old_block = { lines[y - 1], lines[y] };
-    int prev_len = lines[y - 1].size();
+    std::vector<std::string> old_block = { lines[static_cast<size_t>(y - 1)], lines[static_cast<size_t>(y)] };
+    int prev_len = static_cast<int>(lines[static_cast<size_t>(y - 1)].size());
 
-    lines[y - 1] += lines[y];
+    lines[static_cast<size_t>(y - 1)] += lines[static_cast<size_t>(y)];
     lines.erase(lines.begin() + y);
 
-    std::vector<std::string> new_block = { lines[y - 1] };
+    std::vector<std::string> new_block = { lines[static_cast<size_t>(y - 1)] };
     pushBlockUndo(y - 1, y, old_block, new_block, prev_len, y - 1, prev_len, y - 1, UndoType::JOIN);
     dirty = true;
 }
 
 int Buffer::getLineLength(int y) const {
     if (y < 0 || y >= static_cast<int>(lines.size())) return 0;
-    return lines[y].size();
+    return static_cast<int>(lines[static_cast<size_t>(y)].size());
 }
 
 void Buffer::pushUndo(bool is_insert, int x, int y, const std::string& text) {
@@ -112,19 +112,19 @@ void Buffer::undo(int& cx, int& cy) {
     if (current_node->type == UndoType::CHAR_EDIT) {
         if (current_node->is_insert) {
             if (current_node->y >= 0 && current_node->y < static_cast<int>(lines.size())) {
-                lines[current_node->y].erase(current_node->x, current_node->text.size());
+                lines[static_cast<size_t>(current_node->y)].erase(static_cast<size_t>(current_node->x), current_node->text.size());
                 cx = current_node->x;
                 cy = current_node->y;
             }
         } else {
             if (current_node->y >= 0 && current_node->y < static_cast<int>(lines.size())) {
-                lines[current_node->y].insert(current_node->x, current_node->text);
-                cx = current_node->x + current_node->text.size();
+                lines[static_cast<size_t>(current_node->y)].insert(static_cast<size_t>(current_node->x), current_node->text);
+                cx = current_node->x + static_cast<int>(current_node->text.size());
                 cy = current_node->y;
             }
         }
     } else {
-        int num_to_remove = current_node->new_block.size();
+        int num_to_remove = static_cast<int>(current_node->new_block.size());
         if (current_node->start_y >= 0 && current_node->start_y + num_to_remove <= static_cast<int>(lines.size())) {
             lines.erase(lines.begin() + current_node->start_y, lines.begin() + current_node->start_y + num_to_remove);
             lines.insert(lines.begin() + current_node->start_y, current_node->old_block.begin(), current_node->old_block.end());
@@ -142,19 +142,19 @@ void Buffer::redo(int& cx, int& cy) {
     if (next_node->type == UndoType::CHAR_EDIT) {
         if (next_node->is_insert) {
             if (next_node->y >= 0 && next_node->y < static_cast<int>(lines.size())) {
-                lines[next_node->y].insert(next_node->x, next_node->text);
-                cx = next_node->x + next_node->text.size();
+                lines[static_cast<size_t>(next_node->y)].insert(static_cast<size_t>(next_node->x), next_node->text);
+                cx = next_node->x + static_cast<int>(next_node->text.size());
                 cy = next_node->y;
             }
         } else {
             if (next_node->y >= 0 && next_node->y < static_cast<int>(lines.size())) {
-                lines[next_node->y].erase(next_node->x, next_node->text.size());
+                lines[static_cast<size_t>(next_node->y)].erase(static_cast<size_t>(next_node->x), next_node->text.size());
                 cx = next_node->x;
                 cy = next_node->y;
             }
         }
     } else {
-        int num_to_remove = next_node->old_block.size();
+        int num_to_remove = static_cast<int>(next_node->old_block.size());
         if (next_node->start_y >= 0 && next_node->start_y + num_to_remove <= static_cast<int>(lines.size())) {
             lines.erase(lines.begin() + next_node->start_y, lines.begin() + next_node->start_y + num_to_remove);
             lines.insert(lines.begin() + next_node->start_y, next_node->new_block.begin(), next_node->new_block.end());
@@ -175,23 +175,23 @@ void Buffer::toggleComment(int start_y, int end_y, const std::string& ext) {
     std::vector<std::string> old_block;
     for (int i = start_y; i <= end_y; ++i) {
         if (i >= 0 && i < static_cast<int>(lines.size())) {
-            old_block.push_back(lines[i]);
+            old_block.push_back(lines[static_cast<size_t>(i)]);
         }
     }
 
     for (int i = start_y; i <= end_y; ++i) {
         if (i < 0 || i >= static_cast<int>(lines.size())) continue;
-        if (lines[i].rfind(prefix, 0) == 0) {
-            lines[i].erase(0, prefix.size());
+        if (lines[static_cast<size_t>(i)].rfind(prefix, 0) == 0) {
+            lines[static_cast<size_t>(i)].erase(0, prefix.size());
         } else {
-            lines[i].insert(0, prefix);
+            lines[static_cast<size_t>(i)].insert(0, prefix);
         }
     }
 
     std::vector<std::string> new_block;
     for (int i = start_y; i <= end_y; ++i) {
         if (i >= 0 && i < static_cast<int>(lines.size())) {
-            new_block.push_back(lines[i]);
+            new_block.push_back(lines[static_cast<size_t>(i)]);
         }
     }
 

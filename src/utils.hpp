@@ -26,22 +26,22 @@ bool getWindowSize(int& rows, int& cols);
 
 inline uint32_t decodeUTF8(const std::string& s, size_t& i) {
     if (i >= s.size()) return 0;
-    uint8_t c1 = s[i++];
+    uint8_t c1 = static_cast<uint8_t>(s[i++]);
     if (c1 < 0x80) return c1;
     if ((c1 & 0xE0) == 0xC0 && i < s.size()) {
-        uint8_t c2 = s[i++];
-        return ((c1 & 0x1F) << 6) | (c2 & 0x3F);
+        uint8_t c2 = static_cast<uint8_t>(s[i++]);
+        return static_cast<uint32_t>(((c1 & 0x1F) << 6) | (c2 & 0x3F));
     }
     if ((c1 & 0xF0) == 0xE0 && i + 1 < s.size()) {
-        uint8_t c2 = s[i++];
-        uint8_t c3 = s[i++];
-        return ((c1 & 0x0F) << 12) | ((c2 & 0x3F) << 6) | (c3 & 0x3F);
+        uint8_t c2 = static_cast<uint8_t>(s[i++]);
+        uint8_t c3 = static_cast<uint8_t>(s[i++]);
+        return static_cast<uint32_t>(((c1 & 0x0F) << 12) | ((c2 & 0x3F) << 6) | (c3 & 0x3F));
     }
     if ((c1 & 0xF0) == 0xF0 && i + 2 < s.size()) {
-        uint8_t c2 = s[i++];
-        uint8_t c3 = s[i++];
-        uint8_t c4 = s[i++];
-        return ((c1 & 0x07) << 18) | ((c2 & 0x3F) << 12) | ((c3 & 0x3F) << 6) | (c4 & 0x3F);
+        uint8_t c2 = static_cast<uint8_t>(s[i++]);
+        uint8_t c3 = static_cast<uint8_t>(s[i++]);
+        uint8_t c4 = static_cast<uint8_t>(s[i++]);
+        return static_cast<uint32_t>(((c1 & 0x07) << 18) | ((c2 & 0x3F) << 12) | ((c3 & 0x3F) << 6) | (c4 & 0x3F));
     }
     return c1;
 }
