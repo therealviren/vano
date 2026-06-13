@@ -1,0 +1,52 @@
+===============================================================================
+VANO TEXT EDITOR - SYSTEM SETUP & BUILD INFRASTRUCTURE
+===============================================================================
+
+1. SYSTEM REQUIREMENTS
+To build and execute Vano successfully, your environment must provide:
+   - Operating System: Linux, macOS, FreeBSD, or Android (Termux).
+   - Compiler Tools: A compiler natively supporting the ISO C++17 standard 
+     (such as GCC 9+, Clang 10+, or Apple Clang).
+   - Core Utilities: Make, CMake (version 3.12 or newer), and standard tar/gzip.
+   - Terminal Base: A modern terminal window supporting POSIX termios control, 
+     24-bit/8-bit ANSI escapes, and VT100 raw communication modes.
+
+2. BUILD AUTOMATION
+Vano offers two robust compilation paths depending on your workflow preference.
+
+   APPROACH A: NATIVE INSTALLATION SCRIPT
+   The project includes a shell execution script ("install.sh") that handles 
+   platform profiling, system package checks, dependency acquisition, and 
+   binary deployment out of the box.
+
+   Commands:
+     chmod +x install.sh
+     ./install.sh
+
+   Behavior:
+     - Detects the platform architecture and preferred system package manager.
+     - Automates missing compiler framework installations via sudo tracking.
+     - Evaluates target folder write permissions.
+     - Compiles the application and moves the binary safely into your local path.
+
+   APPROACH B: STANDARD CMAKE COMPILATION
+   For packaging systems or standardized continuous environments, use the 
+   bundled CMake configuration file.
+
+   Commands:
+     mkdir build
+     cd build
+     cmake ..
+     cmake --build .
+
+   Result:
+     This outputs a generic portable execution binary directly inside the 
+     active directory build folder.
+
+3. POST-BUILD VERIFICATION
+Confirm that your shell can successfully find and initialize the application:
+   vano --version
+
+If the binary installs to a local user path like "~/.local/bin", ensure that 
+this specific location is included in your global login shell paths array.
+===============================================================================
