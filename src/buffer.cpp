@@ -3,6 +3,7 @@
 Buffer::Buffer() : dirty(false), auto_indent(true) {
     lines.push_back("");
     current_node = std::make_shared<UndoNode>();
+    root_node = current_node;
 }
 
 void Buffer::insertChar(int y, int x, char c) {
@@ -115,12 +116,14 @@ void Buffer::undo(int& cx, int& cy) {
                 lines[static_cast<size_t>(current_node->y)].erase(static_cast<size_t>(current_node->x), current_node->text.size());
                 cx = current_node->x;
                 cy = current_node->y;
+                current_node = parent_ptr;
             }
         } else {
             if (current_node->y >= 0 && current_node->y < static_cast<int>(lines.size())) {
                 lines[static_cast<size_t>(current_node->y)].insert(static_cast<size_t>(current_node->x), current_node->text);
                 cx = current_node->x + static_cast<int>(current_node->text.size());
                 cy = current_node->y;
+                current_node = parent_ptr;
             }
         }
     } else {
@@ -130,9 +133,9 @@ void Buffer::undo(int& cx, int& cy) {
             lines.insert(lines.begin() + current_node->start_y, current_node->old_block.begin(), current_node->old_block.end());
             cx = current_node->old_cx;
             cy = current_node->old_cy;
+            current_node = parent_ptr;
         }
     }
-    current_node = parent_ptr;
 }
 
 void Buffer::redo(int& cx, int& cy) {
@@ -145,12 +148,14 @@ void Buffer::redo(int& cx, int& cy) {
                 lines[static_cast<size_t>(next_node->y)].insert(static_cast<size_t>(next_node->x), next_node->text);
                 cx = next_node->x + static_cast<int>(next_node->text.size());
                 cy = next_node->y;
+                current_node = next_node;
             }
         } else {
             if (next_node->y >= 0 && next_node->y < static_cast<int>(lines.size())) {
                 lines[static_cast<size_t>(next_node->y)].erase(static_cast<size_t>(next_node->x), next_node->text.size());
                 cx = next_node->x;
                 cy = next_node->y;
+                current_node = next_node;
             }
         }
     } else {
@@ -160,9 +165,9 @@ void Buffer::redo(int& cx, int& cy) {
             lines.insert(lines.begin() + next_node->start_y, next_node->new_block.begin(), next_node->new_block.end());
             cx = next_node->new_cx;
             cy = next_node->new_cy;
+            current_node = next_node;
         }
     }
-    current_node = next_node;
 }
 
 void Buffer::toggleComment(int start_y, int end_y, const std::string& ext) {

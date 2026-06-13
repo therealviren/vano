@@ -35,6 +35,7 @@ class Buffer {
 public:
     std::vector<std::string> lines;
     std::shared_ptr<UndoNode> current_node;
+    std::shared_ptr<UndoNode> root_node;
     bool dirty;
     bool auto_indent;
 
