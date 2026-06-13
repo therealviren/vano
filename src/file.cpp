@@ -2,6 +2,11 @@
 #include <fstream>
 #include <cstdlib>
 #include <iterator>
+#include <filesystem>
+#include <system_error>
+#include <string>
+
+namespace fs = std::filesystem;
 
 Theme::Theme() {
     bg_color = "";
@@ -30,18 +35,65 @@ static std::string hexToAnsi(const std::string& hex, bool is_bg) {
             int g = std::stoi(hex.substr(3, 2), nullptr, 16);
             int b = std::stoi(hex.substr(5, 2), nullptr, 16);
             return "\x1b[" + std::to_string(is_bg ? 48 : 38) + ";2;" + std::to_string(r) + ";" + std::to_string(g) + ";" + std::to_string(b) + "m";
-        } catch (...) {}
+        } catch (...) {
+        }
     }
     return "";
 }
 
-void FileManager::loadTheme(Theme& theme) {
+static std::string getVanoDir() {
     const char* home = std::getenv("HOME");
-    if (!home) {
+    if (!home) return "";
+
+    std::string dir = std::string(home) + "/.local/share/vano";
+    std::error_code ec;
+    fs::create_directories(dir, ec);
+    return dir;
+}
+
+static std::string findThemeFile() {
+    std::string dir = getVanoDir();
+    if (dir.empty()) return "";
+
+    std::error_code ec;
+    if (!fs::exists(dir, ec)) return "";
+
+    for (const auto& entry : fs::directory_iterator(dir, ec)) {
+        if (ec) break;
+        if (!entry.is_regular_file(ec)) continue;
+
+        const fs::path& p = entry.path();
+        if (p.has_extension() && p.extension() == ".json") {
+            return p.string();
+        }
+    }
+
+    return "";
+}
+
+static std::string extractStr(const std::string& content, const std::string& key) {
+    size_t pos = content.find("\"" + key + "\"");
+    if (pos == std::string::npos) return "";
+
+    size_t colon = content.find(':', pos);
+    if (colon == std::string::npos) return "";
+
+    size_t quote1 = content.find('"', colon);
+    if (quote1 == std::string::npos) return "";
+
+    size_t quote2 = content.find('"', quote1 + 1);
+    if (quote2 == std::string::npos) return "";
+
+    return content.substr(quote1 + 1, quote2 - quote1 - 1);
+}
+
+void FileManager::loadTheme(Theme& theme) {
+    std::string path = findThemeFile();
+    if (path.empty()) {
         theme.reset = "\x1b[m" + theme.bg_color + theme.fg_color;
         return;
     }
-    std::string path = std::string(home) + "/.local/share/vano/theme.json";
+
     std::ifstream file(path);
     if (!file.is_open()) {
         theme.reset = "\x1b[m" + theme.bg_color + theme.fg_color;
@@ -50,78 +102,62 @@ void FileManager::loadTheme(Theme& theme) {
 
     std::string content((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());
 
-    auto extractStr = [&](const std::string& key) -> std::string {
-        size_t pos = content.find("\"" + key + "\"");
-        if (pos != std::string::npos) {
-            size_t colon = content.find(":", pos);
-            if (colon != std::string::npos) {
-                size_t quote1 = content.find("\"", colon);
-                if (quote1 != std::string::npos) {
-                    size_t quote2 = content.find("\"", quote1 + 1);
-                    if (quote2 != std::string::npos) {
-                        return content.substr(quote1 + 1, quote2 - quote1 - 1);
-                    }
-                }
-            }
-        }
-        return "";
-    };
+    theme.name = extractStr(content, "Name");
 
-    theme.name = extractStr("Name");
-    std::string bg = extractStr("background-color");
+    std::string bg = extractStr(content, "background-color");
     if (!bg.empty()) theme.bg_color = hexToAnsi(bg, true);
 
-    std::string fg = extractStr("text-color");
+    std::string fg = extractStr(content, "text-color");
     if (!fg.empty()) theme.fg_color = hexToAnsi(fg, false);
 
-    std::string kw = extractStr("keyword-color");
+    std::string kw = extractStr(content, "keyword-color");
     if (!kw.empty()) theme.keyword = hexToAnsi(kw, false);
 
-    std::string ty = extractStr("type-color");
+    std::string ty = extractStr(content, "type-color");
     if (!ty.empty()) theme.type = hexToAnsi(ty, false);
 
-    std::string num = extractStr("number-color");
+    std::string num = extractStr(content, "number-color");
     if (!num.empty()) theme.number = hexToAnsi(num, false);
 
-    std::string str = extractStr("string-color");
+    std::string str = extractStr(content, "string-color");
     if (!str.empty()) theme.string = hexToAnsi(str, false);
 
-    std::string com = extractStr("comment-color");
+    std::string com = extractStr(content, "comment-color");
     if (!com.empty()) theme.comment = hexToAnsi(com, false);
 
-    std::string op = extractStr("operator-color");
+    std::string op = extractStr(content, "operator-color");
     if (!op.empty()) theme.operator_color = hexToAnsi(op, false);
 
-    std::string gbg = extractStr("gutter-bg");
+    std::string gbg = extractStr(content, "gutter-bg");
     if (!gbg.empty()) theme.gutter_bg = hexToAnsi(gbg, true);
 
-    std::string gfg = extractStr("gutter-fg");
+    std::string gfg = extractStr(content, "gutter-fg");
     if (!gfg.empty()) theme.gutter_fg = hexToAnsi(gfg, false);
 
-    std::string sn = extractStr("status-normal-bg");
-    std::string snf = extractStr("status-normal-fg");
+    std::string sn = extractStr(content, "status-normal-bg");
+    std::string snf = extractStr(content, "status-normal-fg");
     if (!sn.empty() && !snf.empty()) theme.status_normal = hexToAnsi(sn, true) + hexToAnsi(snf, false);
     else if (!sn.empty()) theme.status_normal = hexToAnsi(sn, true) + "\x1b[37m";
 
-    std::string sv = extractStr("status-visual-bg");
-    std::string svf = extractStr("status-visual-fg");
+    std::string sv = extractStr(content, "status-visual-bg");
+    std::string svf = extractStr(content, "status-visual-fg");
     if (!sv.empty() && !svf.empty()) theme.status_visual = hexToAnsi(sv, true) + hexToAnsi(svf, false);
     else if (!sv.empty()) theme.status_visual = hexToAnsi(sv, true) + "\x1b[37m";
 
-    std::string ss = extractStr("status-search-bg");
-    std::string ssf = extractStr("status-search-fg");
+    std::string ss = extractStr(content, "status-search-bg");
+    std::string ssf = extractStr(content, "status-search-fg");
     if (!ss.empty() && !ssf.empty()) theme.status_search = hexToAnsi(ss, true) + hexToAnsi(ssf, false);
     else if (!ss.empty()) theme.status_search = hexToAnsi(ss, true) + "\x1b[37m";
 
-    std::string sc = extractStr("status-command-bg");
-    std::string scf = extractStr("status-command-fg");
+    std::string sc = extractStr(content, "status-command-bg");
+    std::string scf = extractStr(content, "status-command-fg");
     if (!sc.empty() && !scf.empty()) theme.status_command = hexToAnsi(sc, true) + hexToAnsi(scf, false);
     else if (!sc.empty()) theme.status_command = hexToAnsi(sc, true) + "\x1b[30m";
 
-    std::string sel = extractStr("selection-bg");
+    std::string sel = extractStr(content, "selection-bg");
     if (!sel.empty()) theme.selection = hexToAnsi(sel, true);
 
-    std::string brk = extractStr("bracket-match-bg");
+    std::string brk = extractStr(content, "bracket-match-bg");
     if (!brk.empty()) theme.bracket = hexToAnsi(brk, true);
 
     theme.reset = "\x1b[m" + theme.bg_color + theme.fg_color;
