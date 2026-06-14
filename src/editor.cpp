@@ -728,6 +728,14 @@ void Editor::processKeypress() {
     int mx = 0, my = 0, mb = 0;
     int c = readKey(mx, my, mb);
 
+    int bytes_waiting = 0;
+    static int paste_cooldown = 0;
+    if (ioctl(STDIN_FILENO, FIONREAD, &bytes_waiting) == 0 && bytes_waiting > 0) {
+        paste_cooldown = 10;
+    } else if (paste_cooldown > 0) {
+        paste_cooldown--;
+    }
+
     if (c == MOUSE_EVENT) {
         handleMouse(mx, my, mb);
         return;
@@ -829,7 +837,7 @@ void Editor::processKeypress() {
             if (!command_buffer.empty()) {
                 while (!command_buffer.empty() && (command_buffer.back() & 0xC0) == 0x80) command_buffer.pop_back();
                 if (!command_buffer.empty()) command_buffer.pop_back();
-            }
+                    }
             setStatus(":" + command_buffer);
         } else if (c == '\x1b') {
             mode = MODE_NORMAL;
@@ -1104,7 +1112,8 @@ void Editor::processKeypress() {
 
                     if (utf8_char.size() == 1) {
                         char ch = utf8_char[0];
-                        if (ch == '(' || ch == '{' || ch == '[' || ch == '"' || ch == '\'') {
+                        bool is_pasted = (bytes_waiting > 0 || paste_cooldown > 0);
+                        if (!is_pasted && (ch == '(' || ch == '{' || ch == '[' || ch == '"' || ch == '\'')) {
                             char closing = 0;
                             if (ch == '(') closing = ')';
                             else if (ch == '{') closing = '}';
@@ -1114,7 +1123,7 @@ void Editor::processKeypress() {
                             std::string pair = std::string(1, ch) + closing;
                             buffer.insertStr(cursor.cy, cursor.cx, pair);
                             cursor.cx++;
-                        } else if ((ch == ')' || ch == '}' || ch == ']' || ch == '"' || ch == '\'') &&
+                        } else if (!is_pasted && (ch == ')' || ch == '}' || ch == ']' || ch == '"' || ch == '\'') &&
                                    cursor.cx < buffer.getLineLength(cursor.cy) &&
                                    buffer.lines[static_cast<size_t>(cursor.cy)][static_cast<size_t>(cursor.cx)] == ch) {
                             cursor.cx++;
