@@ -39,21 +39,22 @@ void Editor::init(const std::string& file_path) {
             disableRawMode(state);
             std::cout << "Backup file (.vano_bak) detected. Would you like to restore it? (y/n): ";
             char response;
-            std::cin >> response;
-            enableRawMode(state);
-            if (response == 'y' || response == 'Y') {
-                buffer.lines.clear();
-                std::ifstream bf(backup_path);
-                std::string bline;
-                while (std::getline(bf, bline)) {
-                    buffer.lines.push_back(bline);
+            if (std::cin >> response) {
+                if (response == 'y' || response == 'Y') {
+                    buffer.lines.clear();
+                    std::ifstream bf(backup_path);
+                    std::string bline;
+                    while (std::getline(bf, bline)) {
+                        buffer.lines.push_back(bline);
+                    }
+                    buffer.dirty = true;
+                    setStatus("Restored from backup.");
+                } else {
+                    FileManager::openFile(buffer, filename);
+                    setStatus("Opened file: " + filename);
                 }
-                buffer.dirty = true;
-                setStatus("Restored from backup.");
-            } else {
-                FileManager::openFile(buffer, filename);
-                setStatus("Opened file: " + filename);
             }
+            enableRawMode(state);
         } else {
             if (!FileManager::openFile(buffer, filename)) {
                 setStatus("New file: " + filename);
@@ -146,9 +147,9 @@ void Editor::moveCursor(int key) {
             if (cursor.cx < line_len) {
                 cursor.cx++;
                 while (cursor.cx < line_len && (buffer.lines[static_cast<size_t>(cursor.cy)][static_cast<size_t>(cursor.cx)] & 0xC0) == 0x80) {
-                    cursor.cx++;
+                    cursor.cx--;
                 }
-            } else if (cursor.cy > 0 && cursor.cy < static_cast<int>(buffer.lines.size()) - 1) {
+            } else if (cursor.cy < static_cast<int>(buffer.lines.size()) - 1) {
                 cursor.cy++;
                 cursor.cx = 0;
             }
@@ -218,7 +219,7 @@ void Editor::executeCommand(const std::string& cmd_str) {
             buffer.lines.push_back("");
             cursor.cx = 0;
             cursor.cy = 0;
-            buffer.pushBlockUndo(0, old_block.size() - 1, old_block, buffer.lines, old_cx, old_cy, 0, 0, UndoType::BLOCK_REPLACE);
+            buffer.pushBlockUndo(0, static_cast<int>(old_block.size()) - 1, old_block, buffer.lines, old_cx, old_cy, 0, 0, UndoType::BLOCK_REPLACE);
             buffer.dirty = true;
             setStatus("Buffer cleared.");
             break;
@@ -226,17 +227,18 @@ void Editor::executeCommand(const std::string& cmd_str) {
         case CommandType::SET_TAB:
             if (!cmd.args.empty()) {
                 try {
-                    screen.tab_size = std::stoi(cmd.args[0]);
+                    int val = std::stoi(cmd.args[0]);
+                    if (val > 0 && val <= 16) {
+                        screen.tab_size = val;
+                    } else {
+                        setStatus("Tab size must be between 1 and 16.");
+                    }
                 } catch (...) {
                     setStatus("Invalid tab size value.");
                 }
             }
             break;
-        case CommandType::SYNTAX:
-            if (!cmd.args.empty()) {
-                setStatus("Highlighter language targeted: " + cmd.args[0]);
-            }
-            break;
+        
         case CommandType::GOTO:
             if (!cmd.args.empty()) {
                 try {
@@ -265,9 +267,6 @@ void Editor::executeCommand(const std::string& cmd_str) {
             screen.show_gutter = !screen.show_gutter;
             setStatus(screen.show_gutter ? "Gutter enabled." : "Gutter disabled.");
             break;
-        case CommandType::TOGGLE_WRAP:
-            setStatus("Line wrap configuration adjusted.");
-            break;
         case CommandType::TOGGLE_AI:
             buffer.auto_indent = !buffer.auto_indent;
             setStatus(buffer.auto_indent ? "Auto-indent enabled." : "Auto-indent disabled.");
@@ -279,31 +278,35 @@ void Editor::executeCommand(const std::string& cmd_str) {
             buffer.redo(cursor.cx, cursor.cy);
             break;
         case CommandType::COPY:
-            clipboard.clear();
-            clipboard.push_back(buffer.lines[static_cast<size_t>(cursor.cy)]);
-            setStatus("Current line copied to clipboard.");
+            if (cursor.cy >= 0 && cursor.cy < static_cast<int>(buffer.lines.size())) {
+                clipboard.clear();
+                clipboard.push_back(buffer.lines[static_cast<size_t>(cursor.cy)]);
+                setStatus("Current line copied to clipboard.");
+            }
             break;
         case CommandType::CUT: {
-            std::vector<std::string> old_block = { buffer.lines[static_cast<size_t>(cursor.cy)] };
-            clipboard.clear();
-            clipboard.push_back(buffer.lines[static_cast<size_t>(cursor.cy)]);
-            int old_cx = cursor.cx;
-            int old_cy = cursor.cy;
-            buffer.lines.erase(buffer.lines.begin() + cursor.cy);
-            std::vector<std::string> new_block;
-            if (buffer.lines.empty()) {
-                buffer.lines.push_back("");
-                new_block.push_back("");
+            if (cursor.cy >= 0 && cursor.cy < static_cast<int>(buffer.lines.size())) {
+                std::vector<std::string> old_block = { buffer.lines[static_cast<size_t>(cursor.cy)] };
+                clipboard.clear();
+                clipboard.push_back(buffer.lines[static_cast<size_t>(cursor.cy)]);
+                int old_cx = cursor.cx;
+                int old_cy = cursor.cy;
+                buffer.lines.erase(buffer.lines.begin() + cursor.cy);
+                std::vector<std::string> new_block;
+                if (buffer.lines.empty()) {
+                    buffer.lines.push_back("");
+                    new_block.push_back("");
+                }
+                if (cursor.cy >= static_cast<int>(buffer.lines.size())) cursor.cy = static_cast<int>(buffer.lines.size()) - 1;
+                cursor.cx = 0;
+                buffer.pushBlockUndo(old_cy, old_cy, old_block, new_block, old_cx, old_cy, cursor.cx, cursor.cy, UndoType::BLOCK_REPLACE);
+                buffer.dirty = true;
+                setStatus("Current line cut to clipboard.");
             }
-            if (cursor.cy >= static_cast<int>(buffer.lines.size())) cursor.cy = static_cast<int>(buffer.lines.size()) - 1;
-            cursor.cx = 0;
-            buffer.pushBlockUndo(old_cy, old_cy, old_block, new_block, old_cx, old_cy, cursor.cx, cursor.cy, UndoType::BLOCK_REPLACE);
-            buffer.dirty = true;
-            setStatus("Current line cut to clipboard.");
             break;
         }
         case CommandType::PASTE:
-            if (!clipboard.empty()) {
+            if (!clipboard.empty() && cursor.cy >= 0 && cursor.cy < static_cast<int>(buffer.lines.size())) {
                 int start_y = cursor.cy;
                 std::vector<std::string> old_block(buffer.lines.begin() + start_y, buffer.lines.end());
                 int old_cx = cursor.cx;
@@ -326,9 +329,6 @@ void Editor::executeCommand(const std::string& cmd_str) {
                 buffer.dirty = true;
                 setStatus("Pasted data from clipboard.");
             }
-            break;
-        case CommandType::HELP:
-            setStatus("Commands: save, quit, wq, open, find, replace, clear, goto, indent, stats, count");
             break;
         case CommandType::VERSION:
             setStatus("Vano Editor version " VANO_VERSION);
@@ -377,25 +377,29 @@ void Editor::executeCommand(const std::string& cmd_str) {
             break;
         }
         case CommandType::UPPERCASE: {
-            int old_cx = cursor.cx;
-            int old_cy = cursor.cy;
-            std::vector<std::string> old_block = { buffer.lines[static_cast<size_t>(cursor.cy)] };
-            for (char &c : buffer.lines[static_cast<size_t>(cursor.cy)]) c = static_cast<char>(std::toupper(static_cast<unsigned char>(c)));
-            std::vector<std::string> new_block = { buffer.lines[static_cast<size_t>(cursor.cy)] };
-            buffer.pushBlockUndo(cursor.cy, cursor.cy, old_block, new_block, old_cx, old_cy, cursor.cx, cursor.cy, UndoType::BLOCK_REPLACE);
-            buffer.dirty = true;
-            setStatus("Line modified to uppercase formatting.");
+            if (cursor.cy >= 0 && cursor.cy < static_cast<int>(buffer.lines.size())) {
+                int old_cx = cursor.cx;
+                int old_cy = cursor.cy;
+                std::vector<std::string> old_block = { buffer.lines[static_cast<size_t>(cursor.cy)] };
+                for (char &c : buffer.lines[static_cast<size_t>(cursor.cy)]) c = static_cast<char>(std::toupper(static_cast<unsigned char>(c)));
+                std::vector<std::string> new_block = { buffer.lines[static_cast<size_t>(cursor.cy)] };
+                buffer.pushBlockUndo(cursor.cy, cursor.cy, old_block, new_block, old_cx, old_cy, cursor.cx, cursor.cy, UndoType::BLOCK_REPLACE);
+                buffer.dirty = true;
+                setStatus("Line modified to uppercase formatting.");
+            }
             break;
         }
         case CommandType::LOWERCASE: {
-            int old_cx = cursor.cx;
-            int old_cy = cursor.cy;
-            std::vector<std::string> old_block = { buffer.lines[static_cast<size_t>(cursor.cy)] };
-            for (char &c : buffer.lines[static_cast<size_t>(cursor.cy)]) c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
-            std::vector<std::string> new_block = { buffer.lines[static_cast<size_t>(cursor.cy)] };
-            buffer.pushBlockUndo(cursor.cy, cursor.cy, old_block, new_block, old_cx, old_cy, cursor.cx, cursor.cy, UndoType::BLOCK_REPLACE);
-            buffer.dirty = true;
-            setStatus("Line modified to lowercase formatting.");
+            if (cursor.cy >= 0 && cursor.cy < static_cast<int>(buffer.lines.size())) {
+                int old_cx = cursor.cx;
+                int old_cy = cursor.cy;
+                std::vector<std::string> old_block = { buffer.lines[static_cast<size_t>(cursor.cy)] };
+                for (char &c : buffer.lines[static_cast<size_t>(cursor.cy)]) c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+                std::vector<std::string> new_block = { buffer.lines[static_cast<size_t>(cursor.cy)] };
+                buffer.pushBlockUndo(cursor.cy, cursor.cy, old_block, new_block, old_cx, old_cy, cursor.cx, cursor.cy, UndoType::BLOCK_REPLACE);
+                buffer.dirty = true;
+                setStatus("Line modified to lowercase formatting.");
+            }
             break;
         }
         case CommandType::TRIM_SPACES: {
@@ -407,7 +411,7 @@ void Editor::executeCommand(const std::string& cmd_str) {
                     l.pop_back();
                 }
             }
-            buffer.pushBlockUndo(0, old_block.size() - 1, old_block, buffer.lines, old_cx, old_cy, cursor.cx, cursor.cy, UndoType::BLOCK_REPLACE);
+            buffer.pushBlockUndo(0, static_cast<int>(old_block.size()) - 1, old_block, buffer.lines, old_cx, old_cy, cursor.cx, cursor.cy, UndoType::BLOCK_REPLACE);
             buffer.dirty = true;
             setStatus("Trimmed trailing whitespace configurations.");
             break;
@@ -417,7 +421,7 @@ void Editor::executeCommand(const std::string& cmd_str) {
             int old_cy = cursor.cy;
             std::vector<std::string> old_block = buffer.lines;
             std::sort(buffer.lines.begin(), buffer.lines.end());
-            buffer.pushBlockUndo(0, old_block.size() - 1, old_block, buffer.lines, old_cx, old_cy, cursor.cx, cursor.cy, UndoType::BLOCK_REPLACE);
+            buffer.pushBlockUndo(0, static_cast<int>(old_block.size()) - 1, old_block, buffer.lines, old_cx, old_cy, cursor.cx, cursor.cy, UndoType::BLOCK_REPLACE);
             buffer.dirty = true;
             setStatus("Buffer context components sorted alphabetically.");
             break;
@@ -427,7 +431,7 @@ void Editor::executeCommand(const std::string& cmd_str) {
             int old_cy = cursor.cy;
             std::vector<std::string> old_block = buffer.lines;
             std::reverse(buffer.lines.begin(), buffer.lines.end());
-            buffer.pushBlockUndo(0, old_block.size() - 1, old_block, buffer.lines, old_cx, old_cy, cursor.cx, cursor.cy, UndoType::BLOCK_REPLACE);
+            buffer.pushBlockUndo(0, static_cast<int>(old_block.size()) - 1, old_block, buffer.lines, old_cx, old_cy, cursor.cx, cursor.cy, UndoType::BLOCK_REPLACE);
             buffer.dirty = true;
             setStatus("Buffer lines reversed sequentially.");
             break;
@@ -480,21 +484,6 @@ void Editor::executeCommand(const std::string& cmd_str) {
                 }
             }
             break;
-        case CommandType::RUN_SHELL:
-            if (!cmd.args.empty()) {
-                std::string runtime_cmd;
-                for (const auto& a : cmd.args) runtime_cmd += a + " ";
-                disableRawMode(state);
-                int system_exit_status = system(runtime_cmd.c_str());
-                enableRawMode(state);
-                setStatus("Execution process detached. Code status: " + std::to_string(system_exit_status));
-            }
-            break;
-        case CommandType::SET_THEME:
-            if (!cmd.args.empty()) {
-                setStatus("Color matrix preset targeted: " + cmd.args[0]);
-            }
-            break;
         case CommandType::MACRO_START:
             is_recording = true;
             macro_cmds.clear();
@@ -539,30 +528,6 @@ void Editor::executeCommand(const std::string& cmd_str) {
             saved_bookmark = 0;
             setStatus("All registered user bookmarks wiped clean.");
             break;
-        case CommandType::ENCRYPT_BUFFER: {
-            int old_cx = cursor.cx;
-            int old_cy = cursor.cy;
-            std::vector<std::string> old_block = buffer.lines;
-            for (auto &line : buffer.lines) {
-                for (char &c : line) c += 1;
-            }
-            buffer.pushBlockUndo(0, old_block.size() - 1, old_block, buffer.lines, old_cx, old_cy, cursor.cx, cursor.cy, UndoType::BLOCK_REPLACE);
-            buffer.dirty = true;
-            setStatus("Data content payload encryption complete.");
-            break;
-        }
-        case CommandType::DECRYPT_BUFFER: {
-            int old_cx = cursor.cx;
-            int old_cy = cursor.cy;
-            std::vector<std::string> old_block = buffer.lines;
-            for (auto &line : buffer.lines) {
-                for (char &c : line) c -= 1;
-            }
-            buffer.pushBlockUndo(0, old_block.size() - 1, old_block, buffer.lines, old_cx, old_cy, cursor.cx, cursor.cy, UndoType::BLOCK_REPLACE);
-            buffer.dirty = true;
-            setStatus("Data content payload decryption complete.");
-            break;
-        }
         case CommandType::STRIP_COMMENTS: {
             int old_cx = cursor.cx;
             int old_cy = cursor.cy;
@@ -579,7 +544,7 @@ void Editor::executeCommand(const std::string& cmd_str) {
             }
             buffer.lines = stripped;
             if (buffer.lines.empty()) buffer.lines.push_back("");
-            buffer.pushBlockUndo(0, old_block.size() - 1, old_block, buffer.lines, old_cx, old_cy, cursor.cx, cursor.cy, UndoType::BLOCK_REPLACE);
+            buffer.pushBlockUndo(0, static_cast<int>(old_block.size()) - 1, old_block, buffer.lines, old_cx, old_cy, cursor.cx, cursor.cy, UndoType::BLOCK_REPLACE);
             buffer.dirty = true;
             setStatus("Comments extracted from text layout blocks.");
             break;
@@ -602,17 +567,7 @@ void Editor::executeCommand(const std::string& cmd_str) {
             setStatus("Forced block structure collapse updated.");
             break;
         }
-        case CommandType::SPLIT_WINDOW:
-            setStatus("Horizontal window split operation simulated.");
-            break;
-        case CommandType::VSPLIT_WINDOW:
-            setStatus("Vertical window split operation simulated.");
-            break;
-        case CommandType::ABOUT:
-            setStatus("Vano Terminal Component Text Engine Core Development Suite.");
-            break;
         default:
-            setStatus("Unknown or unhandled command configuration.");
             break;
     }
 }
@@ -1042,7 +997,7 @@ void Editor::processKeypress() {
                 }
                 break;
             case CTRL_KEY('p'):
-                if (!clipboard.empty()) {
+                if (!clipboard.empty() && cursor.cy >= 0 && cursor.cy < static_cast<int>(buffer.lines.size())) {
                     std::vector<std::string> old_block = { buffer.lines[static_cast<size_t>(cursor.cy)] };
                     int old_cx = cursor.cx;
                     int old_cy = cursor.cy;
