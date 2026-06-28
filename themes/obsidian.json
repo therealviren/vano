@@ -1,0 +1,23 @@
+{
+  "Name": "Obsidian",
+  "background-color": "#0A0A0C",
+  "text-color": "#E8E2D9",
+  "keyword-color": "#D6A8FF",
+  "type-color": "#E3B07A",
+  "number-color": "#F08C6C",
+  "string-color": "#B7D18B",
+  "comment-color": "#6C7078",
+  "operator-color": "#D9A4B3",
+  "gutter-bg": "#070709",
+  "gutter-fg": "#4B5059",
+  "status-normal-bg": "#111116",
+  "status-normal-fg": "#E8E2D9",
+  "status-visual-bg": "#2A1F2E",
+  "status-visual-fg": "#FFFFFF",
+  "status-search-bg": "#B7D18B",
+  "status-search-fg": "#0A0A0C",
+  "status-command-bg": "#D6A8FF",
+  "status-command-fg": "#0A0A0C",
+  "selection-bg": "#251F28",
+  "bracket-match-bg": "#E3B07A"
+}                                          

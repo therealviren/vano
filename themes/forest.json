@@ -1,0 +1,23 @@
+{
+  "Name": "Forest",
+  "background-color": "#061F17",
+  "text-color": "#ECFDF5",
+  "keyword-color": "#34D399",
+  "type-color": "#6EE7B7",
+  "number-color": "#FBBF24",
+  "string-color": "#A7F3D0",
+  "comment-color": "#374151",
+  "operator-color": "#10B981",
+  "gutter-bg": "#03140E",
+  "gutter-fg": "#1F2937",
+  "status-normal-bg": "#064E3B",
+  "status-normal-fg": "#ECFDF5",
+  "status-visual-bg": "#047857",
+  "status-visual-fg": "#FFFFFF",
+  "status-search-bg": "#FBBF24",
+  "status-search-fg": "#061F17",
+  "status-command-bg": "#34D399",
+  "status-command-fg": "#061F17",
+  "selection-bg": "#0B3F2E",
+  "bracket-match-bg": "#6EE7B7"
+}
