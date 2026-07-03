@@ -1,0 +1,23 @@
+{
+  "Name": "Nightly",
+  "background-color": "#0B0F19",
+  "text-color": "#D8E1F2",
+  "keyword-color": "#C792EA",
+  "type-color": "#7FDBCA",
+  "number-color": "#F78C6C",
+  "string-color": "#A6E3A1",
+  "comment-color": "#5B6475",
+  "operator-color": "#93C5FD",
+  "gutter-bg": "#080B12",
+  "gutter-fg": "#3F4A5C",
+  "status-normal-bg": "#0F172A",
+  "status-normal-fg": "#D8E1F2",
+  "status-visual-bg": "#1F2A44",
+  "status-visual-fg": "#FFFFFF",
+  "status-search-bg": "#7FDBCA",
+  "status-search-fg": "#081018",
+  "status-command-bg": "#C792EA",
+  "status-command-fg": "#0B0F19",
+  "selection-bg": "#243246",
+  "bracket-match-bg": "#93C5FD"
+}

@@ -1,0 +1,23 @@
+{
+  "Name": "Amber",
+  "background-color": "#1F1916",
+  "text-color": "#E6DFD3",
+  "keyword-color": "#D97706",
+  "type-color": "#65A30D",
+  "number-color": "#EA580C",
+  "string-color": "#84CC16",
+  "comment-color": "#78716C",
+  "operator-color": "#C2410C",
+  "gutter-bg": "#171210",
+  "gutter-fg": "#57534E",
+  "status-normal-bg": "#2E2522",
+  "status-normal-fg": "#E6DFD3",
+  "status-visual-bg": "#FEF3C7",
+  "status-visual-fg": "#92400E",
+  "status-search-bg": "#FDE047",
+  "status-search-fg": "#1F1916",
+  "status-command-bg": "#BBF7D0",
+  "status-command-fg": "#166534",
+  "selection-bg": "#3A2E2A",
+  "bracket-match-bg": "#F59E0B"
+}

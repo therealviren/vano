@@ -1,0 +1,23 @@
+{
+  "Name": "Lightly",
+  "background-color": "#F8FAFC",
+  "text-color": "#1F2937",
+  "keyword-color": "#7C3AED",
+  "type-color": "#0F766E",
+  "number-color": "#C2410C",
+  "string-color": "#15803D",
+  "comment-color": "#94A3B8",
+  "operator-color": "#2563EB",
+  "gutter-bg": "#EEF2F7",
+  "gutter-fg": "#64748B",
+  "status-normal-bg": "#E2E8F0",
+  "status-normal-fg": "#1F2937",
+  "status-visual-bg": "#CBD5E1",
+  "status-visual-fg": "#0F172A",
+  "status-search-bg": "#0F766E",
+  "status-search-fg": "#FFFFFF",
+  "status-command-bg": "#7C3AED",
+  "status-command-fg": "#FFFFFF",
+  "selection-bg": "#DDEBFF",
+  "bracket-match-bg": "#93C5FD"
+}                                          
