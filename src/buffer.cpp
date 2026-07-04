@@ -16,7 +16,8 @@ void Buffer::deleteChar(int y, int x) {
 
 void Buffer::insertStr(int y, int x, const std::string& s) {
     if (y < 0 || y >= static_cast<int>(lines.size())) return;
-    if (x < 0 || x > static_cast<int>(lines[static_cast<size_t>(y)].size())) x = static_cast<int>(lines[static_cast<size_t>(y)].size());
+    if (x < 0) x = 0;
+    if (x > static_cast<int>(lines[static_cast<size_t>(y)].size())) x = static_cast<int>(lines[static_cast<size_t>(y)].size());
     pushUndo(true, x, y, s);
     lines[static_cast<size_t>(y)].insert(static_cast<size_t>(x), s);
     dirty = true;
@@ -26,6 +27,7 @@ void Buffer::deleteStr(int y, int x, int len) {
     if (y < 0 || y >= static_cast<int>(lines.size())) return;
     if (x < 0 || x >= static_cast<int>(lines[static_cast<size_t>(y)].size())) return;
     if (x + len > static_cast<int>(lines[static_cast<size_t>(y)].size())) len = static_cast<int>(lines[static_cast<size_t>(y)].size()) - x;
+    if (len <= 0) return;
     pushUndo(false, x, y, lines[static_cast<size_t>(y)].substr(static_cast<size_t>(x), static_cast<size_t>(len)));
     lines[static_cast<size_t>(y)].erase(static_cast<size_t>(x), static_cast<size_t>(len));
     dirty = true;
@@ -33,7 +35,8 @@ void Buffer::deleteStr(int y, int x, int len) {
 
 void Buffer::insertNewline(int y, int x) {
     if (y < 0 || y >= static_cast<int>(lines.size())) return;
-    if (x < 0 || x > static_cast<int>(lines[static_cast<size_t>(y)].size())) x = static_cast<int>(lines[static_cast<size_t>(y)].size());
+    if (x < 0) x = 0;
+    if (x > static_cast<int>(lines[static_cast<size_t>(y)].size())) x = static_cast<int>(lines[static_cast<size_t>(y)].size());
     std::vector<std::string> old_block = { lines[static_cast<size_t>(y)] };
     std::string split = lines[static_cast<size_t>(y)].substr(static_cast<size_t>(x));
     lines[static_cast<size_t>(y)] = lines[static_cast<size_t>(y)].substr(0, static_cast<size_t>(x));
@@ -49,7 +52,7 @@ void Buffer::insertNewline(int y, int x) {
     lines.insert(lines.begin() + y + 1, indent + split);
 
     std::vector<std::string> new_block = { lines[static_cast<size_t>(y)], lines[static_cast<size_t>(y + 1)] };
-    pushBlockUndo(y, y + 1, old_block, new_block, x, y, 0, y + 1, UndoType::NEWLINE);
+    pushBlockUndo(y, y + 1, old_block, new_block, x, y, static_cast<int>(indent.size()), y + 1, UndoType::NEWLINE);
     dirty = true;
 }
 
@@ -111,19 +114,21 @@ void Buffer::undo(int& cx, int& cy) {
     if (!parent_ptr) return;
 
     if (current_node->type == UndoType::CHAR_EDIT) {
-        if (current_node->is_insert) {
-            if (current_node->y >= 0 && current_node->y < static_cast<int>(lines.size())) {
-                lines[static_cast<size_t>(current_node->y)].erase(static_cast<size_t>(current_node->x), current_node->text.size());
+        if (current_node->y >= 0 && current_node->y < static_cast<int>(lines.size())) {
+            if (current_node->is_insert) {
+                size_t line_sz = lines[static_cast<size_t>(current_node->y)].size();
+                if (static_cast<size_t>(current_node->x) <= line_sz) {
+                    size_t erase_len = std::min(current_node->text.size(), line_sz - static_cast<size_t>(current_node->x));
+                    lines[static_cast<size_t>(current_node->y)].erase(static_cast<size_t>(current_node->x), erase_len);
+                }
                 cx = current_node->x;
                 cy = current_node->y;
-                current_node = parent_ptr;
-            }
-        } else {
-            if (current_node->y >= 0 && current_node->y < static_cast<int>(lines.size())) {
-                lines[static_cast<size_t>(current_node->y)].insert(static_cast<size_t>(current_node->x), current_node->text);
+            } else {
+                if (static_cast<size_t>(current_node->x) <= lines[static_cast<size_t>(current_node->y)].size()) {
+                    lines[static_cast<size_t>(current_node->y)].insert(static_cast<size_t>(current_node->x), current_node->text);
+                }
                 cx = current_node->x + static_cast<int>(current_node->text.size());
                 cy = current_node->y;
-                current_node = parent_ptr;
             }
         }
     } else {
@@ -133,9 +138,10 @@ void Buffer::undo(int& cx, int& cy) {
             lines.insert(lines.begin() + current_node->start_y, current_node->old_block.begin(), current_node->old_block.end());
             cx = current_node->old_cx;
             cy = current_node->old_cy;
-            current_node = parent_ptr;
         }
     }
+    current_node = parent_ptr;
+    dirty = true;
 }
 
 void Buffer::redo(int& cx, int& cy) {
@@ -143,19 +149,21 @@ void Buffer::redo(int& cx, int& cy) {
     auto next_node = current_node->children.back();
 
     if (next_node->type == UndoType::CHAR_EDIT) {
-        if (next_node->is_insert) {
-            if (next_node->y >= 0 && next_node->y < static_cast<int>(lines.size())) {
-                lines[static_cast<size_t>(next_node->y)].insert(static_cast<size_t>(next_node->x), next_node->text);
+        if (next_node->y >= 0 && next_node->y < static_cast<int>(lines.size())) {
+            if (next_node->is_insert) {
+                if (static_cast<size_t>(next_node->x) <= lines[static_cast<size_t>(next_node->y)].size()) {
+                    lines[static_cast<size_t>(next_node->y)].insert(static_cast<size_t>(next_node->x), next_node->text);
+                }
                 cx = next_node->x + static_cast<int>(next_node->text.size());
                 cy = next_node->y;
-                current_node = next_node;
-            }
-        } else {
-            if (next_node->y >= 0 && next_node->y < static_cast<int>(lines.size())) {
-                lines[static_cast<size_t>(next_node->y)].erase(static_cast<size_t>(next_node->x), next_node->text.size());
+            } else {
+                size_t line_sz = lines[static_cast<size_t>(next_node->y)].size();
+                if (static_cast<size_t>(next_node->x) <= line_sz) {
+                    size_t erase_len = std::min(next_node->text.size(), line_sz - static_cast<size_t>(next_node->x));
+                    lines[static_cast<size_t>(next_node->y)].erase(static_cast<size_t>(next_node->x), erase_len);
+                }
                 cx = next_node->x;
                 cy = next_node->y;
-                current_node = next_node;
             }
         }
     } else {
@@ -165,15 +173,16 @@ void Buffer::redo(int& cx, int& cy) {
             lines.insert(lines.begin() + next_node->start_y, next_node->new_block.begin(), next_node->new_block.end());
             cx = next_node->new_cx;
             cy = next_node->new_cy;
-            current_node = next_node;
         }
     }
+    current_node = next_node;
+    dirty = true;
 }
 
 void Buffer::toggleComment(int start_y, int end_y, const std::string& ext) {
     std::string prefix = "// ";
-    if (ext == ".py" || ext == ".sh" || ext == ".rb") prefix = "# ";
-    else if (ext == ".lua") prefix = "-- ";
+    if (ext == ".py" || ext == ".sh" || ext == ".rb" || ext == ".pl" || ext == ".yaml" || ext == ".toml" || ext == "Makefile") prefix = "# ";
+    else if (ext == ".lua" || ext == ".hs" || ext == ".sql") prefix = "-- ";
 
     if (start_y > end_y) std::swap(start_y, end_y);
 
@@ -184,10 +193,23 @@ void Buffer::toggleComment(int start_y, int end_y, const std::string& ext) {
         }
     }
 
+    bool all_commented = true;
+    for (int i = start_y; i <= end_y; ++i) {
+        if (i >= 0 && i < static_cast<int>(lines.size())) {
+            const std::string& line = lines[static_cast<size_t>(i)];
+            if (!line.empty() && line.rfind(prefix, 0) != 0) {
+                all_commented = false;
+                break;
+            }
+        }
+    }
+
     for (int i = start_y; i <= end_y; ++i) {
         if (i < 0 || i >= static_cast<int>(lines.size())) continue;
-        if (lines[static_cast<size_t>(i)].rfind(prefix, 0) == 0) {
-            lines[static_cast<size_t>(i)].erase(0, prefix.size());
+        if (all_commented) {
+            if (lines[static_cast<size_t>(i)].rfind(prefix, 0) == 0) {
+                lines[static_cast<size_t>(i)].erase(0, prefix.size());
+            }
         } else {
             lines[static_cast<size_t>(i)].insert(0, prefix);
         }

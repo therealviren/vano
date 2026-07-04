@@ -4,6 +4,7 @@
 #include <string>
 #include <vector>
 #include <memory>
+#include <algorithm>
 
 enum class UndoType {
     CHAR_EDIT,

@@ -5,6 +5,7 @@
 #include "cursor.hpp"
 #include "file.hpp"
 #include <string>
+#include <cstddef>
 
 enum EditorMode {
     MODE_NORMAL,

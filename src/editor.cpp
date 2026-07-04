@@ -36,25 +36,23 @@ void Editor::init(const std::string& file_path) {
     if (!filename.empty()) {
         std::string backup_path = filename + ".vano_bak";
         if (access(backup_path.c_str(), F_OK) == 0) {
-            disableRawMode(state);
-            std::cout << "Backup file (.vano_bak) detected. Would you like to restore it? (y/n): ";
-            char response;
-            if (std::cin >> response) {
-                if (response == 'y' || response == 'Y') {
-                    buffer.lines.clear();
-                    std::ifstream bf(backup_path);
-                    std::string bline;
-                    while (std::getline(bf, bline)) {
-                        buffer.lines.push_back(bline);
-                    }
-                    buffer.dirty = true;
-                    setStatus("Restored from backup.");
-                } else {
-                    FileManager::openFile(buffer, filename);
-                    setStatus("Opened file: " + filename);
+            setStatus("Backup file (.vano_bak) detected. Restore it? (y/n): ");
+            screen.refresh(buffer, cursor, filename, status_msg, mode, 0, 0, 0, 0);
+            int mx = 0, my = 0, mb = 0;
+            int response = readKey(mx, my, mb);
+            if (response == 'y' || response == 'Y') {
+                buffer.lines.clear();
+                std::ifstream bf(backup_path);
+                std::string bline;
+                while (std::getline(bf, bline)) {
+                    buffer.lines.push_back(bline);
                 }
+                buffer.dirty = true;
+                setStatus("Restored from backup.");
+            } else {
+                FileManager::openFile(buffer, filename);
+                setStatus("Opened file: " + filename);
             }
-            enableRawMode(state);
         } else {
             if (!FileManager::openFile(buffer, filename)) {
                 setStatus("New file: " + filename);
@@ -147,7 +145,7 @@ void Editor::moveCursor(int key) {
             if (cursor.cx < line_len) {
                 cursor.cx++;
                 while (cursor.cx < line_len && (buffer.lines[static_cast<size_t>(cursor.cy)][static_cast<size_t>(cursor.cx)] & 0xC0) == 0x80) {
-                    cursor.cx--;
+                    cursor.cx++;
                 }
             } else if (cursor.cy < static_cast<int>(buffer.lines.size()) - 1) {
                 cursor.cy++;
@@ -451,8 +449,12 @@ void Editor::executeCommand(const std::string& cmd_str) {
             std::tm* current_time_data = std::localtime(&t);
             char dbuf[64];
             std::strftime(dbuf, sizeof(dbuf), "%Y-%m-%d", current_time_data);
+            std::vector<std::string> old_blk = { buffer.lines[static_cast<size_t>(cursor.cy)] };
+            int old_cx = cursor.cx;
             buffer.insertStr(cursor.cy, cursor.cx, dbuf);
             cursor.cx += static_cast<int>(std::string(dbuf).size());
+            std::vector<std::string> new_blk = { buffer.lines[static_cast<size_t>(cursor.cy)] };
+            buffer.pushBlockUndo(cursor.cy, cursor.cy, old_blk, new_blk, old_cx, cursor.cy, cursor.cx, cursor.cy, UndoType::BLOCK_REPLACE);
             buffer.dirty = true;
             break;
         }
@@ -461,8 +463,12 @@ void Editor::executeCommand(const std::string& cmd_str) {
             std::tm* current_time_data = std::localtime(&t);
             char tbuf[64];
             std::strftime(tbuf, sizeof(tbuf), "%H:%M:%S", current_time_data);
+            std::vector<std::string> old_blk = { buffer.lines[static_cast<size_t>(cursor.cy)] };
+            int old_cx = cursor.cx;
             buffer.insertStr(cursor.cy, cursor.cx, tbuf);
             cursor.cx += static_cast<int>(std::string(tbuf).size());
+            std::vector<std::string> new_blk = { buffer.lines[static_cast<size_t>(cursor.cy)] };
+            buffer.pushBlockUndo(cursor.cy, cursor.cy, old_blk, new_blk, old_cx, cursor.cy, cursor.cx, cursor.cy, UndoType::BLOCK_REPLACE);
             buffer.dirty = true;
             break;
         }
@@ -764,13 +770,22 @@ void Editor::processKeypress() {
                 return;
             } else if (seq == "[3~") {
                 if (cursor.cx < buffer.getLineLength(cursor.cy)) {
+                    std::vector<std::string> old_blk = { buffer.lines[static_cast<size_t>(cursor.cy)] };
+                    int old_cx = cursor.cx;
                     int bytes_to_delete = 1;
                     while (cursor.cx + bytes_to_delete < buffer.getLineLength(cursor.cy) && (buffer.lines[static_cast<size_t>(cursor.cy)][static_cast<size_t>(cursor.cx + bytes_to_delete)] & 0xC0) == 0x80) {
                         bytes_to_delete++;
                     }
                     buffer.deleteStr(cursor.cy, cursor.cx, bytes_to_delete);
+                    std::vector<std::string> new_blk = { buffer.lines[static_cast<size_t>(cursor.cy)] };
+                    buffer.pushBlockUndo(cursor.cy, cursor.cy, old_blk, new_blk, old_cx, cursor.cy, cursor.cx, cursor.cy, UndoType::BLOCK_REPLACE);
                 } else if (cursor.cy < static_cast<int>(buffer.lines.size()) - 1) {
+                    std::vector<std::string> old_blk = { buffer.lines[static_cast<size_t>(cursor.cy)], buffer.lines[static_cast<size_t>(cursor.cy + 1)] };
+                    int old_cx = cursor.cx;
+                    int old_cy = cursor.cy;
                     buffer.joinLines(cursor.cy + 1);
+                    std::vector<std::string> new_blk = { buffer.lines[static_cast<size_t>(cursor.cy)] };
+                    buffer.pushBlockUndo(old_cy, old_cy + 1, old_blk, new_blk, old_cx, old_cy, cursor.cx, cursor.cy, UndoType::BLOCK_REPLACE);
                 }
                 return;
             }
@@ -817,6 +832,8 @@ void Editor::processKeypress() {
                 }
                 if (structural_tab) spaces = screen.tab_size;
             }
+            std::vector<std::string> old_blk = { buffer.lines[static_cast<size_t>(cursor.cy)] };
+            int old_cx = cursor.cx;
             if (spaces > 0) {
                 buffer.deleteStr(cursor.cy, cursor.cx - spaces, spaces);
                 cursor.cx -= spaces;
@@ -828,10 +845,17 @@ void Editor::processKeypress() {
                 buffer.deleteStr(cursor.cy, cursor.cx - bytes_to_delete, bytes_to_delete);
                 cursor.cx -= bytes_to_delete;
             }
+            std::vector<std::string> new_blk = { buffer.lines[static_cast<size_t>(cursor.cy)] };
+            buffer.pushBlockUndo(cursor.cy, cursor.cy, old_blk, new_blk, old_cx, cursor.cy, cursor.cx, cursor.cy, UndoType::BLOCK_REPLACE);
         } else if (cursor.cy > 0) {
+            std::vector<std::string> old_blk = { buffer.lines[static_cast<size_t>(cursor.cy - 1)], buffer.lines[static_cast<size_t>(cursor.cy)] };
+            int old_cx = cursor.cx;
+            int old_cy = cursor.cy;
             cursor.cx = buffer.getLineLength(cursor.cy - 1);
             buffer.joinLines(cursor.cy);
             cursor.cy--;
+            std::vector<std::string> new_blk = { buffer.lines[static_cast<size_t>(cursor.cy)] };
+            buffer.pushBlockUndo(cursor.cy, cursor.cy + 1, old_blk, new_blk, old_cx, old_cy, cursor.cx, cursor.cy, UndoType::BLOCK_REPLACE);
         }
     } else {
         switch (c) {
@@ -841,16 +865,26 @@ void Editor::processKeypress() {
                 setStatus(":");
                 break;
             case TAB_KEY: {
+                std::vector<std::string> old_blk = { buffer.lines[static_cast<size_t>(cursor.cy)] };
+                int old_cx = cursor.cx;
                 buffer.insertStr(cursor.cy, cursor.cx, std::string(static_cast<size_t>(screen.tab_size), ' '));
                 cursor.cx += screen.tab_size;
+                std::vector<std::string> new_blk = { buffer.lines[static_cast<size_t>(cursor.cy)] };
+                buffer.pushBlockUndo(cursor.cy, cursor.cy, old_blk, new_blk, old_cx, cursor.cy, cursor.cx, cursor.cy, UndoType::BLOCK_REPLACE);
                 break;
             }
             case '\r':
-            case '\n':
+            case '\n': {
+                std::vector<std::string> old_blk = { buffer.lines[static_cast<size_t>(cursor.cy)] };
+                int old_cx = cursor.cx;
+                int old_cy = cursor.cy;
                 buffer.insertNewline(cursor.cy, cursor.cx);
                 cursor.cy++;
                 cursor.cx = 0;
+                std::vector<std::string> new_blk = { buffer.lines[static_cast<size_t>(old_cy)], buffer.lines[static_cast<size_t>(cursor.cy)] };
+                buffer.pushBlockUndo(old_cy, old_cy, old_blk, new_blk, old_cx, old_cy, cursor.cx, cursor.cy, UndoType::BLOCK_REPLACE);
                 break;
+            }
             case CTRL_KEY('q'):
                 if (buffer.dirty) {
                     setStatus("Warning: Unsaved changes. Press Ctrl-Q again to force quit.");
@@ -1031,13 +1065,22 @@ void Editor::processKeypress() {
                 break;
             case DEL_KEY:
                 if (cursor.cx < buffer.getLineLength(cursor.cy)) {
+                    std::vector<std::string> old_blk = { buffer.lines[static_cast<size_t>(cursor.cy)] };
+                    int old_cx = cursor.cx;
                     int bytes_to_delete = 1;
                     while (cursor.cx + bytes_to_delete < buffer.getLineLength(cursor.cy) && (buffer.lines[static_cast<size_t>(cursor.cy)][static_cast<size_t>(cursor.cx + bytes_to_delete)] & 0xC0) == 0x80) {
                         bytes_to_delete++;
                     }
                     buffer.deleteStr(cursor.cy, cursor.cx, bytes_to_delete);
+                    std::vector<std::string> new_blk = { buffer.lines[static_cast<size_t>(cursor.cy)] };
+                    buffer.pushBlockUndo(cursor.cy, cursor.cy, old_blk, new_blk, old_cx, cursor.cy, cursor.cx, cursor.cy, UndoType::BLOCK_REPLACE);
                 } else if (cursor.cy < static_cast<int>(buffer.lines.size()) - 1) {
+                    std::vector<std::string> old_blk = { buffer.lines[static_cast<size_t>(cursor.cy)], buffer.lines[static_cast<size_t>(cursor.cy + 1)] };
+                    int old_cx = cursor.cx;
+                    int old_cy = cursor.cy;
                     buffer.joinLines(cursor.cy + 1);
+                    std::vector<std::string> new_blk = { buffer.lines[static_cast<size_t>(cursor.cy)] };
+                    buffer.pushBlockUndo(old_cy, old_cy + 1, old_blk, new_blk, old_cx, old_cy, cursor.cx, cursor.cy, UndoType::BLOCK_REPLACE);
                 }
                 break;
             case ARROW_UP:
@@ -1065,6 +1108,9 @@ void Editor::processKeypress() {
                         utf8_char += static_cast<char>(readKey(dx, dy, db));
                     }
 
+                    std::vector<std::string> old_blk = { buffer.lines[static_cast<size_t>(cursor.cy)] };
+                    int old_cx = cursor.cx;
+
                     if (utf8_char.size() == 1) {
                         char ch = utf8_char[0];
                         bool is_pasted = (bytes_waiting > 0 || paste_cooldown > 0);
@@ -1090,6 +1136,9 @@ void Editor::processKeypress() {
                         buffer.insertStr(cursor.cy, cursor.cx, utf8_char);
                         cursor.cx += static_cast<int>(utf8_char.size());
                     }
+
+                    std::vector<std::string> new_blk = { buffer.lines[static_cast<size_t>(cursor.cy)] };
+                    buffer.pushBlockUndo(cursor.cy, cursor.cy, old_blk, new_blk, old_cx, cursor.cy, cursor.cx, cursor.cy, UndoType::BLOCK_REPLACE);
                 }
                 break;
         }
